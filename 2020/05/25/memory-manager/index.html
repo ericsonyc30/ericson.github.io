@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.2.1">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"yoursite.com","root":"/","scheme":"Gemini","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="前言在操作系统出现之前，程序曾经存放在卡片上，计算机每读一张卡片，就运行一条指令，这个时候程序是直接从卡片到执行；但这种从外部存储媒介上直接执行指令的做法效率极低，且灵活性很差，一次只能一个卡片来处理；因此人们发明了内存存储器，来将需要运行的程序先行加载，再自动执行，从而提高效率和灵活性。由于内存的出现，出现了“存储的程序”概念的出现，而存储的程序概念又导致计算机及软件系统的革命性变化，此后人们对">
+<meta property="og:type" content="article">
+<meta property="og:title" content="从种地到内存管理的哲学原理">
+<meta property="og:url" content="http://yoursite.com/2020/05/25/memory-manager/index.html">
+<meta property="og:site_name" content="Ericson博客">
+<meta property="og:description" content="前言在操作系统出现之前，程序曾经存放在卡片上，计算机每读一张卡片，就运行一条指令，这个时候程序是直接从卡片到执行；但这种从外部存储媒介上直接执行指令的做法效率极低，且灵活性很差，一次只能一个卡片来处理；因此人们发明了内存存储器，来将需要运行的程序先行加载，再自动执行，从而提高效率和灵活性。由于内存的出现，出现了“存储的程序”概念的出现，而存储的程序概念又导致计算机及软件系统的革命性变化，此后人们对">
+<meta property="og:image" content="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/bd11ede9b819af06040ab2c207aa3967.png">
+<meta property="og:image" content="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/09fe06f30ca6c87dc1010f70eb1cd2cb.png">
+<meta property="og:image" content="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/8433f81df942e2c752bf13b7abb0b37a.png">
+<meta property="og:image" content="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/bd99774e8bbd140cd05e68ad266c11b1.png">
+<meta property="og:image" content="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/133a5a2b3fe1a809eb2b1e910fb28a5a.png">
+<meta property="og:image" content="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/5f02ccf8b8cdaee0e93b955b3283ea91.png">
+<meta property="og:image" content="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/ff165180a8891e8081ffc58f88bfa754.png">
+<meta property="article:published_time" content="2020-05-25T12:46:36.000Z">
+<meta property="article:modified_time" content="2020-05-25T12:47:26.551Z">
+<meta property="article:author" content="ericson (杨晨)">
+<meta property="article:tag" content="内存管理">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/bd11ede9b819af06040ab2c207aa3967.png">
+
+<link rel="canonical" href="http://yoursite.com/2020/05/25/memory-manager/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-Hans'
+  };
+</script>
+
+  <title>从种地到内存管理的哲学原理 | Ericson博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">Ericson博客</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+      <p class="site-subtitle" itemprop="description">每天努力一点点</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/05/25/memory-manager/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/ericson1.jpg">
+      <meta itemprop="name" content="ericson (杨晨)">
+      <meta itemprop="description" content="道为术之灵，术为道之体；以道统术，以术得道；">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Ericson博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          从种地到内存管理的哲学原理
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+              
+
+              <time title="Created: 2020-05-25 20:46:36 / Modified: 20:47:26" itemprop="dateCreated datePublished" datetime="2020-05-25T20:46:36+08:00">2020-05-25</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">In</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86/" itemprop="url" rel="index"><span itemprop="name">基础知识</span></a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>在操作系统出现之前，程序曾经存放在卡片上，计算机每读一张卡片，就运行一条指令，这个时候程序是直接从卡片到执行；但这种从外部存储媒介上直接执行指令的做法效率极低，且灵活性很差，一次只能一个卡片来处理；因此人们发明了内存存储器，来将需要运行的程序先行加载，再自动执行，从而提高效率和灵活性。<br>由于内存的出现，出现了“存储的程序”概念的出现，而存储的程序概念又导致计算机及软件系统的革命性变化，此后人们对内存的要求越来越高。</p>
+<h2 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h2><p>理想的情况下，程序员或用户对内存的要求是：大容量，高速度和持久性。但程序员面临的物理现实却是一个由缓存、主存、硬盘等组成的内存架构。<br>缓存的特点：低容量、高速度、高价格；<br>主存的特点：中容量、中速度、中价格；<br>硬盘的特点：大容量、低速度、低成本；<br>这样的存储架构和程序员、用户的期望相差较大；要以现在的架构为程序员所需的内存抽象，需要一个巧妙有效的内存管理机制。</p>
+<h2 id="内存管理相关"><a href="#内存管理相关" class="headerlink" title="内存管理相关"></a>内存管理相关</h2><p>内存管理把缓存、主存、硬盘都当成一样的内存，因为不管用户的程序是在缓存还是在主存或者硬盘，反正运行计算输出结果都是一样的。<br>内存管理怎么把缓存、主存和硬盘当成是一样的呢？？？这个时候就需要抽象（就像人类喜欢把香蕉和桃子都叫做水果），缓存、主存和硬盘被抽象为“虚拟内存”；通过虚拟内存，程序员和用户不关心底层的实现，只知道程序存在虚拟内存中。<br>虚拟内存本身独立于物理内存，因此概念提出的瞬间，内存管理机制便天然拥有一个目标：地址独立。那内存管理机制还有没有其他目标了？？？<br>在当今的多道程序操作系统中，虚拟内存中会运行着大量的程序，程序与程序之间是要相互独立的，因此内存管理的另一个目标就在于地址保护：一个程序不能去访问另一个程序的内存地址。<br>由于虚拟内存屏蔽了缓存、主存、硬盘的差异性，因此虚拟内存可以看做是操作系统提供的大容量，高速度的内存。<br>本文从种地的角度来解释操作系统内存管理机制的演变以及演变中的哲学原理，知识来源于生活。</p>
+<h2 id="种地（本故事纯属虚构）"><a href="#种地（本故事纯属虚构）" class="headerlink" title="种地（本故事纯属虚构）"></a>种地（本故事纯属虚构）</h2><p>汉朝时期，老王出身贫寒，遂从军，历时十载，军功赫赫，国内一片繁荣；老王怕功高震主，遂请辞回家养老，由于老王的军功，皇帝赐了一块封地给他颐养天年；老王美滋滋的踏上了去封地的旅程~~<br>老王到了封地，果然是一片很大的封地，但是一片荒凉，啥都没有；老王把这块地叫做“物理内存”，给它标记了地址，一开始的地址为0，不停的增长到封地尽头N；</p>
+<h3 id="盖房子（操作系统内存位置）"><a href="#盖房子（操作系统内存位置）" class="headerlink" title="盖房子（操作系统内存位置）"></a>盖房子（操作系统内存位置）</h3><p>老王决定先建一个房子住，不然都没地方住，他把自己的房子命名为“操作系统”；问题产生了：房子建在哪边（操作系统应该放在物理内存哪边）？可以是地址0~N的任何地址位置。<br>计算机中的清零操作很方便，并且开始地址0很容易索引，因此老王决定把操作系统建在地址0处。</p>
+<blockquote>
+<p>老王未雨绸缪，怕将来有仇家寻上门，因此在房子下面建立了地下密室，用于藏身，命名为ROM；<br>计算机体系中分为RAM和ROM，物理内存就是RAM，RAM断电内容消失，因此操作系统一部分是放在ROM上，另一部分加载到RAM中。<br>最后，老王的房子分为了地上的部分和地下密室的部分。</p>
+</blockquote>
+<p><img src="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/bd11ede9b819af06040ab2c207aa3967.png" alt="操作系统内存位置"></p>
+<h3 id="单一作物（单道编程）"><a href="#单一作物（单道编程）" class="headerlink" title="单一作物（单道编程）"></a>单一作物（单道编程）</h3><p>老王很喜欢吃土豆，因此老王决定挑选一块地种土豆；这个时候封地上除了房子只有一个农作物：土豆；相当于计算机中的单道编程，用户程序永远只有一个；这样老王可以随机挑选一个固定的地址T；每次在T地址上种植土豆；这种运行前即将物理地址计算好的方式叫做“静态地址翻译”。这种情况下，虚拟地址永远映射到固定的物理内存地址上；因此单道编程的情况下很容易达到内存管理机制的两个目标。</p>
+<blockquote>
+<p>单道编程的缺点很多，只能运行一个程序，并行度很低；此外加载程序的大小不能超过物理内存空间；而且程序不能移植到不同的操作系统，因为不同操作系统的内存空间大小不一样。</p>
+</blockquote>
+<h3 id="多个作物（多道编程）"><a href="#多个作物（多道编程）" class="headerlink" title="多个作物（多道编程）"></a>多个作物（多道编程）</h3><p>老王吃多了土豆，生病了，大夫让老王吃点其他蔬菜，营养均衡，因此老王想在土豆的基础上种植其他的蔬菜（青菜，番茄等。。。）；老王也不知道要吃多少中蔬菜才能补营养，因此老王不能很好的规划种植的地址；</p>
+<blockquote>
+<p>因为多道编程的情况下，程序无法再加载到固定的内存地址上，这就无法使用静态地址翻译；计算机必须在程序加载完毕后才能计算物理地址，这种就叫做“动态地址翻译”。</p>
+</blockquote>
+<p><img src="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/09fe06f30ca6c87dc1010f70eb1cd2cb.png" alt="动态地址翻译"></p>
+<h4 id="固定分区"><a href="#固定分区" class="headerlink" title="固定分区"></a>固定分区</h4><p>面对如此多的蔬菜作物，老王想了个办法，一批批的补充营养；老王将封地分为大小不同的分区（为啥大小不同，因为有些老王爱吃，多种点），分区数为M；不同的分区种上不同的蔬菜；这样封地有多少分区，老王就可以种多少蔬菜，等其中分区的蔬菜吃完就可以在分区种另一种蔬菜。</p>
+<blockquote>
+<p>计算机系统将内存分为大小不同的多个分区；因为程序的大小不同，不同的程序分配到不同的分区；操作系统用一个队列保存了操作系统的程序，当有空白分区的时候，把程序加入空白分区里；<br>老王知道喜爱的菜多种些，让分区物尽其用；但是计算机如果把小程序分配到大分区里，会造成大量空间的浪费；因此可以每个分区都有自己独立的队列，把适合该分区的程序存放在队列中，当分区空白时，加载相应的程序，这样空间浪费率相对低点。<br>不管是单队列，还是分区多队列，都有很大的问题，但队列的话，会造成大量的空间浪费；多队列会造成有空白分区，但是其他队列的程序再等待，不能运行。</p>
+</blockquote>
+<p>那固定分区的这种情况下，老王怎么统计农作物的地址；老王记录了每个分区在封地的起始地址；然后记录了农作物在分区里的虚拟地址；因此封地的物理地址=虚拟地址+分区的起始地址。</p>
+<blockquote>
+<p>这就是固定分区，计算机的地址翻译；对于内存管理的两个目标，地址保护可以通过地址翻译来判断程序是否超出了分区的地址；因此计算机只需要保存一个基址和一个极限就可以达到地址保护的目的；可以通过基址寄存器和极限寄存器来保存；地址独立是虚拟内存自带的概念；因此固定分区完全符合内存管理的设计。</p>
+</blockquote>
+<p><img src="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/8433f81df942e2c752bf13b7abb0b37a.png" alt="基址+极限"></p>
+<h4 id="非固定分区"><a href="#非固定分区" class="headerlink" title="非固定分区"></a>非固定分区</h4><p>经过了固定分区的规划，老王美滋滋的幻想起了以后美好的生活；但是老王忽略了一点，就是自己的种植能力；大的分区全种植了自己爱吃的番茄，但由于自己种植不当，大部分番茄没长出来，今年造成了大量的土地浪费；老王很心痛，痛则思变；<br>老王想了很久，还是决定灵活处理，不固定分区，而是把封地除了操作系统房子外都当成一个整体；如果要种青菜，则分出一块地中青菜；如果又要种番茄，则在剩下的封地中再分出一块地种番茄；依次类推，当地不足时，就等其中的蔬菜成熟收割后，把地空出来后再种剩下的蔬菜。<br>老王一想，这样就不会有地浪费了，当种不出来的时候，老王就可以种其他蔬菜，充分利用封地；</p>
+<blockquote>
+<p>老王的思想在操作系统中叫做非固定分区内存管理；当程序来的时候，会在空白内存中挑选一块给程序执行。<br>由于固定分区的时候我们知道，用基址和极限两个寄存器就可以表示每个程序的位置；因此在非固定分区下，为每个程序配置基址和极限寄存器就可以识别程序的物理地址。</p>
+</blockquote>
+<p><img src="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/bd99774e8bbd140cd05e68ad266c11b1.png" alt="非固定分区内存管理"></p>
+<p>乍一看，好像问题都解决了，但是老王忽略了一个很严重的问题；有些蔬菜有很强的侵略性，像蒲公英一样，种子会到处传播；导致其他土地上也长满这样的蔬菜，这样就不能很好的隔开种植，规划封地了。</p>
+<blockquote>
+<p>计算机程序在运行过程中，会出现动态增长的情况；程序空间增值的主要来源：数据和栈。那么怎么处理程序的增长呢？？？<br>解决办法就是为增长的程序预留出增长的空间，因此数据和栈的增长就如图所示。<br>数据和栈增长的方向可以是相同，也可以是相反；诞生不同的策略。</p>
+</blockquote>
+<p><img src="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/133a5a2b3fe1a809eb2b1e910fb28a5a.png" alt="分固定分区动态增长"></p>
+<p>预留空间是正常的做法，就像生活中不知道数量的情况下会多留点空间；但是这个有个致命的缺点，就是很难预测究竟需要预留多大的空间，预留多了是种浪费；预留少了没解决根本问题；老王苦思冥想，终于想出了个办法，参考家里的密室，横截面不能扩张，那就往高度上扩张；老王在土地上搭建一层架子，架子上也铺上土，当种菜溢出自己地盘的时候，就把蔬菜移植到架子上面，这样就便于管理了。</p>
+<blockquote>
+<p>那类比到计算机系统中，内存地址不够了怎么办？？？我们不能在上面搭建一层架子；但是我们考虑搭建架子的本质是把蔬菜放到另一片内存中，相当于扩展了内存，因此我们想起来硬盘；我们可以把程序整个加载到硬盘上，当物理内存有足够的空间时，再把程序加载回内存运行，这就是所谓的“交换”。<br>交换的这种方式存在这很大的问题，一个程序被置换出去后，不知道要等多久才能等到足够的空间运行；效率低下；还有个问题，如果超出了整个物理内存，再怎么置换也没用。<br>如果可以把程序变成一个个可执行的单元，执行完一个单元，后面的单元就把前面单元地址覆盖掉；这样就不会出现程序空间不够的情况，这个办法就是所谓的“重叠”；但是程序的切分需要用户管控，相当于把内存管理机制暴露给了用户，这是很危险的，这个办法行不通。</p>
+</blockquote>
+<h3 id="闲置空间管理"><a href="#闲置空间管理" class="headerlink" title="闲置空间管理"></a>闲置空间管理</h3><p>老王是个追求完美的人，他种了很多蔬菜，但是封地依然有很多没有利用的空地，老王需要很好的统计，规划这些空地。老王想了良两种办法：<br>（1）位图法：<br>       老王为每个种植蔬菜的地址单元分配一个字位，用1表示已占用；0表示空闲，这样就形成了一个位图；0表示所有的空闲地址；当空闲地址种植蔬菜时，由0改为1，变成已占用；当蔬菜生熟收割后，地址回收，相应的字位由1变为0，表示空闲。<br>（2）链表法：<br>       老王将分配的地址用链表连接在一起；比如，青菜–&gt;空地–&gt;番茄–&gt;空地；每个节点记录节点的地址；当需要种植蔬菜时，则遍历链表找到空闲的地址种植，链表进行相应的修改。</p>
+<h3 id="问题暴露"><a href="#问题暴露" class="headerlink" title="问题暴露"></a>问题暴露</h3><p>经历了一年的时光，老王也种植了一年蔬菜，老王决定做下总结，把经验分享给后来人；从固定分区到非固定分区到交换内存管理；固定分区用于单道编程，而非固定分区和交换等用于多道编程，实现方式都是基于基址和极限的做法。<br>老王总结了半天，根据统计：不管是固定分区，还是非固定分区；这些策略都存在着重大的问题；其中最重要的就是空间浪费和程序大小受限。随着不停的回收分配，内存中的碎片越来越多；很多小碎片无法满足种植的需求，浪费了；</p>
+<blockquote>
+<p>由于这些碎片处于进程空间的外面，因此这种碎片化过程也叫做“外部碎片化”。随着进程的进进出出，外部碎片将浪费大量的内存空间；当然可以采取一定的策略降低外部碎片，比如每次分配新进程的时候，挑选最合适的空间分配，这可以在一定程度上减轻外部碎片。<br>还有种办法是可以进行碎片整理，通过交换，把碎片合并在一起；但交换效率非常低。</p>
+</blockquote>
+<h3 id="分页管理"><a href="#分页管理" class="headerlink" title="分页管理"></a>分页管理</h3><p>上述整个的做法，都是把程序整个加载到内存里。老王把整个区域都种植一种蔬菜，但是每种蔬菜的种子数量不相同，这就会导致外部碎片的存在；老王想到了一种办法，为啥每次都要以蔬菜种子的数量来要求土地，而不是用土地来要求蔬菜种子的数量。</p>
+<blockquote>
+<p>此外，上述程序增长的极限在于物理内存的大小；如果一部分一部分的加载程序，程序的增长极限就被扩大了。</p>
+</blockquote>
+<p>想到这里，老王开始实施自己的想法，他把整个封地按照一定的大小，划分成很多块，每一小块叫做一个分页。<br><img src="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/5f02ccf8b8cdaee0e93b955b3283ea91.png" alt="分页管理"></p>
+<p>有了分页之后，老王的种植变的更加容易管理；他可以在每一页上种植任何自己想吃的蔬菜；比如在第1号页上种植土豆，在第2号页上种植番茄，如果老王需要土豆种植量增大，但又没有额外空间了，那么可以把2号页上的番茄移植成土豆。</p>
+<blockquote>
+<p>在计算机操作系统中；程序被分成一页页的，每个程序都可以运行一部分页在内存中，当需要运行程序其他部分时，会把其他也加载到内存；如果没有额外的内存空间，则会把当前一些页置换到硬盘中，空出内存给运行的程序使用；这种方法下，程序可以超出物理内存实际的限制大小。</p>
+</blockquote>
+<h4 id="分页地址翻译"><a href="#分页地址翻译" class="headerlink" title="分页地址翻译"></a>分页地址翻译</h4><p>有了分页后，老王如果管理这些分页，并且知道每个分页上种植的蔬菜，而不是每天都要走一遍整个封地。老王对页面进行编号，从0开始；从上述的基址和极限，我们知道，分页的地址主要分为两块：页面号和页内偏移地址。</p>
+<blockquote>
+<p>分页系统首先要知道的是该页面是否存在物理内存中，如果存在，对应的物理页面号是哪个？如果不存在，则产生缺页中断，并将虚页从磁盘加载到内存，然后将分配的物理页面号返回。<br>由于虚页和物理内存真实的页面是同样大小，因此地址翻译只需要把虚页转换到物理页，页内偏移地址无需改变。<br>分页内存管理中，不光需要知道页号，还需要知道该页面是否在物理内存中；此外页面有没有修改过，有没有被访问过，都需要保存这些信息；因此诞生了页表的概念；<br>页表在内存管理的地位十分重要，根本功能是提供从虚拟页面到物理页面的映射。比如32位寻址的虚拟地址，如果页面大小为4KB，则虚拟页面最多可以达到$ 2^{20} $，也就是页表记录条数最大为：$ 2^{20} $。</p>
+</blockquote>
+<p>现在老王有了自己的页表，页表里记录了虚拟页面号到物理页面号的映射，并且记录了页面的偏移地址；比如老王的页面上记载了虚拟页面0种植了土豆，并且土豆的偏移地址为页面的一半；这条记录就代表了物理页面a上面种植了土豆，并且整个页面从起始地址到页面一半处种植了土豆，剩余的一半页面空闲着；</p>
+<p>通过这个案例，可以看出，分页管理把外部的碎片转移到了页内，由于分页的粒度比分区的更细，从数学上看，平均浪费空间为半个分页，因此浪费的空间比分区要好很多。</p>
+<p>那分页系统还有其他缺点吗？？？<br>有，缺点就是页表很大，占用了大量的内存空间。汉朝没有纸张，都是通过竹简和绵帛来记录的，老王一穷二白，只有封地，因此只能把页表记录在土地上；因此页表太大也会占用大量的内存空间。</p>
+<h4 id="页表"><a href="#页表" class="headerlink" title="页表"></a>页表</h4><p>老王参考分页的做法，把页表也进行了分页；就是“多级页表”的概念。</p>
+<blockquote>
+<p>操作系统中，顶级页表映射到一级页表，然后一级页表映射到二级页表，依次映射；这样当加载页表时，可以先加载顶级页表，根据一层层映射把需要的页表加载到内存，不用的页表放在硬盘上，这样就可以支持多级页表；<br>但是多级页表增加了地址翻译的次数，每次操作数据，都需要进行多级的地址翻译；内存访问的速度明显下降。<br>多级页表通过增加级数来降低页表的内存空间；有办法不增加级数来降低页表的内存空间吗？？？使用反转页表，正常页表存储的是虚拟内存到物理内存的映射，但是虚拟内存空间要远远大于物理内存；这个时候反转页表，保存物理内存到虚拟内存的映射，由于物理内存较小，这样空间大大减少；但是CPU发出的地址是虚拟地址，反转列表造成了查询的困难；这时候可以通过虚拟页面到物理页面的散列来提升查询效率。<br>页表的形式也是不断的演变，针对不同的系统需求页表会有不同的演变需求。</p>
+</blockquote>
+<h4 id="翻译快表"><a href="#翻译快表" class="headerlink" title="翻译快表"></a>翻译快表</h4><p>在多级页表的情况下，地址翻译的速度大大降低，影响了内存的访问速度；由于程序的时空局限性，我们可以将页表的翻译结果存在缓存中，缓存的速度要高于内存的速度，在缓存命中的情况下，内存的读写速度将会提高；这种将翻译结果放在缓存的结果，就叫“翻译快表”。在翻译快表的情况下，如果快速的查找到虚拟页面是否存在翻译快表中；这个时候只能一个记录一个记录的按顺序查询，如果翻译快表中不存在页面，则每次都需要按顺序查询；时间消耗巨大。<br>基于这种情况，软件已经无法解决根本问题，只能把问题交给硬件；硬件为每条记录配备一套电路，当翻译快表比对时，是同一时间比对所有记录；这样会在第一时间获得比对结果。</p>
+<h4 id="页面更换算法"><a href="#页面更换算法" class="headerlink" title="页面更换算法"></a>页面更换算法</h4><p>老王现在已经有了页表，有了页面内存管理；老王又出现了一个问题：土地有了，房子有了，蔬菜也有了，但是没有钱，买不了衣服等生活用品；为了赚更多的钱满足生活需要，老王决定把种的蔬菜卖掉；为了利益最大化，老王需要卖掉当季流行的蔬菜，但当季流行的蔬菜变化很快；老王需要一种策略可以很快的替换页面，种植流行的蔬菜。</p>
+<blockquote>
+<p>老王的问题就涉及到了页面置换算法，页面置换算法的根本目的，是要增加页面的命中率；从人类哲学的层次来看，页面置换算法主要分为两类：公平算法和非公平算法。<br>公平算法：</p>
+</blockquote>
+<ul>
+<li>随机算法</li>
+<li>先来先出算法</li>
+<li>第二次机会算法</li>
+<li>时钟算法<blockquote>
+<p>非公平算法：</p>
+</blockquote>
+</li>
+<li>最有算法</li>
+<li>NRU算法</li>
+<li>LRU算法</li>
+<li>工作集算法<blockquote>
+<p>这些算法就不一一解释了。</p>
+</blockquote>
+</li>
+</ul>
+<h3 id="段式内存管理"><a href="#段式内存管理" class="headerlink" title="段式内存管理"></a>段式内存管理</h3><p>老王把封地管理的有条不紊；分页内存管理被老王用的炉火纯青；一切都很顺利，但是这个时候问题又来了；老王又病了，大夫说长期不吃肉，抵抗力下降。老王寻思着大夫的话，决定在封地上养写鸡鸭。<br>于是，老王划了两块连在一起的地来养鸡鸭；鸡鸭各占一块；由于缺少养家禽的经验，鸡鸭繁殖的速度很快，导致划分的土地不够鸡鸭生存，鸡鸭把周围的蔬菜都糟蹋了。</p>
+<blockquote>
+<p>在操作系统中，编译器的工作过程经常需要保持多个数据结构：常数表，语法分析树，代码段，调用栈等；每个数据结构都是独立的增长，从而造成了内存空间的变化。如果编译器只在一个虚拟空间中活动，那么所有数据结构的增长可能会相互碰撞，导致无法增长，编译失败。<br>这就是分页系统的缺点；虚拟空间的大小受寻址宽度的限制而无法增长；那剩下的办法就是让一个程序使用多个虚拟空间。</p>
+</blockquote>
+<p>老王把封地参考分区的做法，分为多个段；一个段占用一个虚拟地址空间；把一个程序分为多个段，不同的段运行在不同的虚拟内存中；为了区分不同的段，我们有了段号和段内偏移地址。段的个数非常少，因此段表的尺寸非常小。</p>
+<p><img src="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/ff165180a8891e8081ffc58f88bfa754.png" alt="段式内存管理"></p>
+<blockquote>
+<p>分段的优点十分明显，程序每个逻辑单元可单独占一个虚拟地址空间，这样可使编写的程序的空间大为增长；不会出现分页系统一个页面里可能同时包含数据和代码而造成增长极限和共享的问题；<br>分段的感觉像是又回到了分区时代；缺点十分明显；外部碎片以及一个段必须全部加载到内存。</p>
+</blockquote>
+<h3 id="段页式内存管理"><a href="#段页式内存管理" class="headerlink" title="段页式内存管理"></a>段页式内存管理</h3><p>老王既琢磨出来分页管理，又琢磨出了分段管理；到底用哪个，老王一拍脑袋，为啥不组合下，把优点结合下，这就出来了段页式存储。<br>把一个段内存按页来分，就是段表映射到页表；这种段页式结合了段式和页式的优点，现在大部分商业系统都使用段页式内存管理方式。</p>
+<h2 id="后记"><a href="#后记" class="headerlink" title="后记"></a>后记</h2><p>由于老王在管理上的卓越贡献，皇帝特封其为农国公。知识源于生活，老王用生活的经验沉淀出了一套操作系统内存管理的机制。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/" rel="tag"># 内存管理</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/05/25/threads-sync/" rel="prev" title="从养金鱼到线程同步的哲学原理">
+      <i class="fa fa-chevron-left"></i> 从养金鱼到线程同步的哲学原理
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2020/05/25/innodb-features/" rel="next" title="浅尝InnoDB关键特性">
+      浅尝InnoDB关键特性 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#前言"><span class="nav-number">1.</span> <span class="nav-text">前言</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#背景"><span class="nav-number">2.</span> <span class="nav-text">背景</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#内存管理相关"><span class="nav-number">3.</span> <span class="nav-text">内存管理相关</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#种地（本故事纯属虚构）"><span class="nav-number">4.</span> <span class="nav-text">种地（本故事纯属虚构）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#盖房子（操作系统内存位置）"><span class="nav-number">4.1.</span> <span class="nav-text">盖房子（操作系统内存位置）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#单一作物（单道编程）"><span class="nav-number">4.2.</span> <span class="nav-text">单一作物（单道编程）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#多个作物（多道编程）"><span class="nav-number">4.3.</span> <span class="nav-text">多个作物（多道编程）</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#固定分区"><span class="nav-number">4.3.1.</span> <span class="nav-text">固定分区</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#非固定分区"><span class="nav-number">4.3.2.</span> <span class="nav-text">非固定分区</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#闲置空间管理"><span class="nav-number">4.4.</span> <span class="nav-text">闲置空间管理</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#问题暴露"><span class="nav-number">4.5.</span> <span class="nav-text">问题暴露</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#分页管理"><span class="nav-number">4.6.</span> <span class="nav-text">分页管理</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#分页地址翻译"><span class="nav-number">4.6.1.</span> <span class="nav-text">分页地址翻译</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#页表"><span class="nav-number">4.6.2.</span> <span class="nav-text">页表</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#翻译快表"><span class="nav-number">4.6.3.</span> <span class="nav-text">翻译快表</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#页面更换算法"><span class="nav-number">4.6.4.</span> <span class="nav-text">页面更换算法</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#段式内存管理"><span class="nav-number">4.7.</span> <span class="nav-text">段式内存管理</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#段页式内存管理"><span class="nav-number">4.8.</span> <span class="nav-text">段页式内存管理</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#后记"><span class="nav-number">5.</span> <span class="nav-text">后记</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="ericson (杨晨)"
+      src="/images/ericson1.jpg">
+  <p class="site-author-name" itemprop="name">ericson (杨晨)</p>
+  <div class="site-description" itemprop="description">道为术之灵，术为道之体；以道统术，以术得道；</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">6</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">4</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">5</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2020</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">ericson (杨晨)</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a>
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script size="300" alpha="0.6" zIndex="-1" src="//cdn.jsdelivr.net/gh/theme-next/theme-next-canvas-ribbon@1/canvas-ribbon.js"></script>
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+  <script defer src="//cdn.jsdelivr.net/gh/theme-next/theme-next-three@1/three.min.js"></script>
+    <script defer src="//cdn.jsdelivr.net/gh/theme-next/theme-next-three@latest/three-waves.min.js"></script>
+    <script defer src="//cdn.jsdelivr.net/gh/theme-next/theme-next-three@latest/canvas_lines.min.js"></script>
+    <script defer src="//cdn.jsdelivr.net/gh/theme-next/theme-next-three@latest/canvas_sphere.min.js"></script>
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

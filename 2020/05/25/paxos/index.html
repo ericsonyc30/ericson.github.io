@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.2.1">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"yoursite.com","root":"/","scheme":"Gemini","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="前言如果世界上只有一种分布式一致性算法，那就是Paxos。Paxos是出了名的晦涩难懂。Paxos有点类似2PC和3PC，但是它解决了这两种算法存在的问题。先简要介绍下2PC和3PC的做法和缺陷： 两阶段提交（2PC）从名字上可以看出两阶段提交分为两个阶段：Propose和Commit。  Propose阶段： 协调者：发起提议； 投票者：同意或否决提议；   Commit阶段： 协调者：根据提议">
+<meta property="og:type" content="article">
+<meta property="og:title" content="浅尝Paxos协议">
+<meta property="og:url" content="http://yoursite.com/2020/05/25/paxos/index.html">
+<meta property="og:site_name" content="Ericson博客">
+<meta property="og:description" content="前言如果世界上只有一种分布式一致性算法，那就是Paxos。Paxos是出了名的晦涩难懂。Paxos有点类似2PC和3PC，但是它解决了这两种算法存在的问题。先简要介绍下2PC和3PC的做法和缺陷： 两阶段提交（2PC）从名字上可以看出两阶段提交分为两个阶段：Propose和Commit。  Propose阶段： 协调者：发起提议； 投票者：同意或否决提议；   Commit阶段： 协调者：根据提议">
+<meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/bfd17ad9d0263f79439c77415e4123df.png">
+<meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/0bd12a64fe81c26da1f7b328db9dd6dc.png">
+<meta property="article:published_time" content="2020-05-25T12:11:33.000Z">
+<meta property="article:modified_time" content="2020-05-25T12:36:47.775Z">
+<meta property="article:author" content="ericson (杨晨)">
+<meta property="article:tag" content="paxos">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/bfd17ad9d0263f79439c77415e4123df.png">
+
+<link rel="canonical" href="http://yoursite.com/2020/05/25/paxos/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-Hans'
+  };
+</script>
+
+  <title>浅尝Paxos协议 | Ericson博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">Ericson博客</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+      <p class="site-subtitle" itemprop="description">每天努力一点点</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/05/25/paxos/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/ericson1.jpg">
+      <meta itemprop="name" content="ericson (杨晨)">
+      <meta itemprop="description" content="道为术之灵，术为道之体；以道统术，以术得道；">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Ericson博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          浅尝Paxos协议
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+              
+
+              <time title="Created: 2020-05-25 20:11:33 / Modified: 20:36:47" itemprop="dateCreated datePublished" datetime="2020-05-25T20:11:33+08:00">2020-05-25</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">In</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F/" itemprop="url" rel="index"><span itemprop="name">分布式</span></a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>如果世界上只有一种分布式一致性算法，那就是Paxos。Paxos是出了名的晦涩难懂。<br>Paxos有点类似2PC和3PC，但是它解决了这两种算法存在的问题。<br>先简要介绍下2PC和3PC的做法和缺陷：</p>
+<h3 id="两阶段提交（2PC）"><a href="#两阶段提交（2PC）" class="headerlink" title="两阶段提交（2PC）"></a>两阶段提交（2PC）</h3><p>从名字上可以看出两阶段提交分为两个阶段：Propose和Commit。</p>
+<ul>
+<li>Propose阶段：<ul>
+<li>协调者：发起提议；</li>
+<li>投票者：同意或否决提议；</li>
+</ul>
+</li>
+<li>Commit阶段：<ul>
+<li>协调者：根据提议发起最终commit；</li>
+<li>投票者：进行最终的commit；<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/bfd17ad9d0263f79439c77415e4123df.png" alt="示意图"><br>缺点：2PC不能处理fail-stop问题，即当在第二阶段时，如果协调者和其中一个投票者（voter3）crash了，那其他投票者将会一直阻塞等待直到接收到消息为止，这个时候就需要人工手动重启协调者；在这种情况下，其他投票者不能区分第一阶段中voter3是反对了提议还是同意了提议。</li>
+</ul>
+</li>
+</ul>
+<h3 id="三阶段提交（3PC）"><a href="#三阶段提交（3PC）" class="headerlink" title="三阶段提交（3PC）"></a>三阶段提交（3PC）</h3><p>3PC解决了上述2PC的问题，把Commit阶段分成了PreCommit和Commit结算，相当于在Commit操作之前加了个屏障，这个屏障相当于告诉所有投票者，所有投票者都收到了propose的结果；当协调者在PreCommit之前crash，则voters可以认为不是所有voters收到propose结果，从而放弃commit或者选择新的协调者；如果协调者在PreCommit之后crash，则每个voter可以放心的Commit，因为已经默认所有voters都收到propose结果了。<br>缺点：3PC可以处理fail-stop的问题，但是不能处理网络划分和fail-recover问题。<br>网络划分：当有多个机器处于不同的网络中，并且网络之间不能通信，那协调者crash之后，两个网络会选出不同的新的协调者。<br>fail-recover：当协调者crash之后，选出新的协调者；当老的协调者重启后，新老协调者对同一个投票者可能发送不同的指令，投票者的状态出现分歧。</p>
+<h2 id="Paxos"><a href="#Paxos" class="headerlink" title="Paxos"></a>Paxos</h2><h3 id="概念"><a href="#概念" class="headerlink" title="概念"></a>概念</h3><blockquote>
+<p>Paxos is a mechanism for achieving consensus on a single value over unreliable communication channels.</p>
+</blockquote>
+<p>简单的来说就是：Paxos就是在一个不稳定的网络环境中对一个值达成一致。</p>
+<h3 id="Paxos解决的问题"><a href="#Paxos解决的问题" class="headerlink" title="Paxos解决的问题"></a>Paxos解决的问题</h3><p>Paxos诞生于古希腊Paxos岛上的多个法官在一个大厅对一个议案进行表决，如何达成统一结果的故事。<br>Paxos解决的问题是如果在一个机器宕机或者网络异常等异常的分布式系统中，快速且正确的再集群内部对某个数据值达成一致，并且保证异常不会破坏整个系统的一致性。（Paxos没办法抵抗恶意行为的节点，比如一个节点故意返回一个相反的结果，Paxos没办法解决这样的问题，因此Paxos没办法解决拜占庭将军问题，除非加上各种校验）。</p>
+<h3 id="协议过程"><a href="#协议过程" class="headerlink" title="协议过程"></a>协议过程</h3><h4 id="基本角色"><a href="#基本角色" class="headerlink" title="基本角色"></a>基本角色</h4><p>Paxos协议有三个角色：</p>
+<ul>
+<li>Proposer：提议发起者；</li>
+<li>Acceptor：提议接受者；</li>
+<li>Learner：提议学习者；</li>
+</ul>
+<h4 id="协议推导过程"><a href="#协议推导过程" class="headerlink" title="协议推导过程"></a>协议推导过程</h4><p>分布式一致性问题：<br>假设有一组可以提出value的进程集合；一致性算法需要保证提出的这么多的value中，只有一个value被选定，其他进程都应该能学习到这个被选定的值；这样所有的进程都最终保存相同的值。</p>
+<p>分布式一致性基本要求：<br>安全性：只有被提出的值才能被选定，只有一个value被选定；<br>活性：值最终会被选择，并且所有进程都会最终学习到这个值；</p>
+<p>推导过程：<br>Proposer是提议的发起者，不能决定最终选择的值，因此我们从Acceptor角色看起；<br>假设只有一个Acceptor，只要Acceptor接收到第一个提议，该提议就被选定，这样可以保证只有一个value被选定，但是如果机器宕机了，这唯一的Acceptor就不工作了，达不到问题的最终结果；因此必须有多个Acceptor。（paxos协议解决了机器宕机的问题）</p>
+<p>如果是多个Acceptor的情况，怎么保证多个Proposer和多个Acceptor下选定一个唯一的value?<br>假设Acceptor只要接收到第一个提议，就选中；则每个Acceptor都会选中一个唯一的value；但是由于多个Proposer提出的value会有不同，这样根据不同的网络速度，每个Acceptor选中的值不一样，不成立。<br>因此，Acceptor选择第一个值的约束不成立。这就意味着，Acceptor不能单纯的选择第一个值，那么提议的值必然是要有区分，这样才能区分Acceptor接收的是哪个值。</p>
+<blockquote>
+<p>提议的提案={提议的值+提议的编号}。</p>
+</blockquote>
+<p>由于Acceptor不单纯选择第一条提案，那么Acceptor就是可以接收多条提案，并从中选择一条作为最终值，如果有N个节点的Acceptor，要保证N个节点选定的是同一个值，这样的概率非常低，因此有了另一个约定：</p>
+<blockquote>
+<p>Acceptor可以接收多个提案，但是不需要全部都是同一个值，而是半数以上是同一个值，就最终确定这个值，就是典型的少数服从多数的原则。</p>
+</blockquote>
+<p>有了少数服从多数的原则，我们就可以标记多数选择的值为最终的一致值；但是少数服从多数还会带来一个问题：如果有三个节点选择了提案1；三个节点选择了提案2；其余都是小众；那就出现了平票的场景。这样的场景最终该选择哪个提案？<br>这个就需要决定提案1和提案2的优先级；因此提议的编号我们设置成自增。这样就诞生了一个约定：</p>
+<blockquote>
+<p>如果一个编号的提议值V被选择，那么每个编号更高（编号是自增的）的被Acceptor接受的提案的值必须是V。</p>
+</blockquote>
+<h4 id="协议描述"><a href="#协议描述" class="headerlink" title="协议描述"></a>协议描述</h4><p>基于上述的约定，Paxos算法大致如下，和两阶段有点类似：</p>
+<ul>
+<li>第一阶段：<ul>
+<li>Proposer选择一个提案编号N，然后向半数以上的Acceptor发送编号为N的Prepare请求；</li>
+<li>如果一个Acceptor接收到提案编号N，并且这个N大于该Acceptor已经响应过的所有编号；那么它就会将已经响应的最大编号的值返回给Proposer；同时该Acceptor承诺不再接收比N小的提案；</li>
+</ul>
+</li>
+<li>第二阶段：<ul>
+<li>如果Proposer收到半数以上的Acceptor对其发出的编号为N的Prepare请求响应，那么它就会发送一个[N,V]的Accept请求给半数以上的Acceptor。其中V就是响应编号中最大的提案的那个值。如果没有提案，则Proposer自行决定。</li>
+<li>如果Acceptor收到一个针对编号为N的提案的Accept的请求，只要该Acceptor没有对比N大的Prepare请求做过响应，它就接收该提案。</li>
+</ul>
+</li>
+</ul>
+<p><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/0bd12a64fe81c26da1f7b328db9dd6dc.png" alt="Paxos过程"></p>
+<h4 id="Learner角色"><a href="#Learner角色" class="headerlink" title="Learner角色"></a>Learner角色</h4><p>如果计算机网络中节点非常多的话，广播一次所有节点将消耗大量的性能；因此我们可以只适用一部分的节点应用Paxos协议；然后当Acceptor接受最终提案后，就将最终的提案大宋给Learner；Learner的做法有好几种：</p>
+<ul>
+<li>提案发给所有Learner；</li>
+<li>提案发给一个主Learner，然后主Learner再发给其余Learner；</li>
+<li>提案发给一个Learner集合；然后集合再发给其他Learner；<br>几种做法各有优缺点，这里不详细讨论。</li>
+</ul>
+<h4 id="主Proposer"><a href="#主Proposer" class="headerlink" title="主Proposer"></a>主Proposer</h4><p>上述的协议保证了基本要求中的安全性；但是还存在活性的问题：<br>如果两个Proposer先后提出了顺序递增的提案，那么整个过程将陷入一个死循环中；<br>比如Proposer1提出了N=1的提案完成了第一阶段；这个时候Proposer2提出了N=2的提案也继续完成了第一阶段；那么这个时候Proposer1进行第二阶段会失败，它会再次发起N=3的提案；Proposer2进行第二阶段也失败，它会进行N=4的提案；这样就会不停的死循环下去。<br>因此，Proposer也需要进行一个主次的分别。</p>
+<h3 id="协议证明"><a href="#协议证明" class="headerlink" title="协议证明"></a>协议证明</h3><p>Paxos协议最终解决了当一个提议被多数接受后，这个提议的值被选定；那么这个值就是分布式一致的；后续所有进程选择的都是同一个值。<br>其实，Paxos就是一个数学问题，我们来看下数学证明：</p>
+<h4 id="原命题"><a href="#原命题" class="headerlink" title="原命题"></a>原命题</h4><blockquote>
+<p>如果一个提议{N0,V0}被多数Acceptor接受，那么不会存在提议{N1,V1}被大多数Acceptor接受，其中N0&lt;N1，并且V0!=V1；</p>
+</blockquote>
+<h4 id="证明"><a href="#证明" class="headerlink" title="证明"></a>证明</h4><p>不妨用反证法：<br>假设存在{N1,V1}符合条件，并且N1是满足条件最小的提议编号。<br>那么提议N0，N0+1，N0+2 。。。。N1-1编号对应的值都为V0；<br>由于存在{N1,V1}，说明N1被半数以上的Acceptor接受，并承诺不会接受比N1小的编号；<br>又因为存在{N0,V0}，说明N0也被半数以上的Acceptor接受，并承诺不会接受比N0小的编号；<br>所以，存在一个Acceptor即接受了N1，又接受了N0；<br>由Paxos协议得知，这个Acceptor一定是先接受了N0，再接受了N1；<br>所以在发出{N1,V1}这个提议的Proposer在发出{N1,V1}之前，有一个共识；必然存在一个N&gt;=N0，并且值为V0的提议被接受；这个时候这个Proposer会从所有的Acceptor返回值中选择一个编号最大的作为发送的请求；因此会选择一个N&gt;=N0,并且值为编号最大的值V0；<br>因此，就有V0==V1；矛盾，所以不存在该{N1,V1};</p>
+<h2 id="参考文档"><a href="#参考文档" class="headerlink" title="参考文档"></a>参考文档</h2><p>[1] Paxos made simple论文<br>[2] The Part-Time Parliament论文</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/paxos/" rel="tag"># paxos</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/05/25/hello-world/" rel="prev" title="Hello World">
+      <i class="fa fa-chevron-left"></i> Hello World
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2020/05/25/threads-sync/" rel="next" title="从养金鱼到线程同步的哲学原理">
+      从养金鱼到线程同步的哲学原理 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#前言"><span class="nav-number">1.</span> <span class="nav-text">前言</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#两阶段提交（2PC）"><span class="nav-number">1.1.</span> <span class="nav-text">两阶段提交（2PC）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#三阶段提交（3PC）"><span class="nav-number">1.2.</span> <span class="nav-text">三阶段提交（3PC）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Paxos"><span class="nav-number">2.</span> <span class="nav-text">Paxos</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#概念"><span class="nav-number">2.1.</span> <span class="nav-text">概念</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Paxos解决的问题"><span class="nav-number">2.2.</span> <span class="nav-text">Paxos解决的问题</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#协议过程"><span class="nav-number">2.3.</span> <span class="nav-text">协议过程</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#基本角色"><span class="nav-number">2.3.1.</span> <span class="nav-text">基本角色</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#协议推导过程"><span class="nav-number">2.3.2.</span> <span class="nav-text">协议推导过程</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#协议描述"><span class="nav-number">2.3.3.</span> <span class="nav-text">协议描述</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Learner角色"><span class="nav-number">2.3.4.</span> <span class="nav-text">Learner角色</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#主Proposer"><span class="nav-number">2.3.5.</span> <span class="nav-text">主Proposer</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#协议证明"><span class="nav-number">2.4.</span> <span class="nav-text">协议证明</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#原命题"><span class="nav-number">2.4.1.</span> <span class="nav-text">原命题</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#证明"><span class="nav-number">2.4.2.</span> <span class="nav-text">证明</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#参考文档"><span class="nav-number">3.</span> <span class="nav-text">参考文档</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="ericson (杨晨)"
+      src="/images/ericson1.jpg">
+  <p class="site-author-name" itemprop="name">ericson (杨晨)</p>
+  <div class="site-description" itemprop="description">道为术之灵，术为道之体；以道统术，以术得道；</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">6</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">4</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">5</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2020</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">ericson (杨晨)</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a>
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script size="300" alpha="0.6" zIndex="-1" src="//cdn.jsdelivr.net/gh/theme-next/theme-next-canvas-ribbon@1/canvas-ribbon.js"></script>
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+  <script defer src="//cdn.jsdelivr.net/gh/theme-next/theme-next-three@1/three.min.js"></script>
+    <script defer src="//cdn.jsdelivr.net/gh/theme-next/theme-next-three@latest/three-waves.min.js"></script>
+    <script defer src="//cdn.jsdelivr.net/gh/theme-next/theme-next-three@latest/canvas_lines.min.js"></script>
+    <script defer src="//cdn.jsdelivr.net/gh/theme-next/theme-next-three@latest/canvas_sphere.min.js"></script>
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.2.1">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"yoursite.com","root":"/","scheme":"Gemini","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="InnoDB体系架构InnoDB是MySQL数据库中最常用的存储引擎，InnoDB的体系架构如下图所示： InnoDB体系架构主要包含三部分：后台线程，缓冲池，文件。 （一）后台线程InnoDB使用多线程模型，后台线程主要分为四个线程：  Master Thread： 最核心的一个线程，用于异步刷新缓冲页到磁盘，保证数据一致性； IO Thread： InnoDB中使用了大量异步IO来处理IO请求">
+<meta property="og:type" content="article">
+<meta property="og:title" content="InnoDB存储结构理解">
+<meta property="og:url" content="http://yoursite.com/2020/05/25/innodb-storage/index.html">
+<meta property="og:site_name" content="Ericson博客">
+<meta property="og:description" content="InnoDB体系架构InnoDB是MySQL数据库中最常用的存储引擎，InnoDB的体系架构如下图所示： InnoDB体系架构主要包含三部分：后台线程，缓冲池，文件。 （一）后台线程InnoDB使用多线程模型，后台线程主要分为四个线程：  Master Thread： 最核心的一个线程，用于异步刷新缓冲页到磁盘，保证数据一致性； IO Thread： InnoDB中使用了大量异步IO来处理IO请求">
+<meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/16a15c4c8584761e10441c0031014a63.png">
+<meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/9c0f42905d6c2e00df917f8af6126cb1.png">
+<meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/d34a62025f56a46368f750f8f538f01a.png">
+<meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/788bcf3147d69f067716c729c79742a9.png">
+<meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/97f1a146b2cd487e977a5419b173474c.png">
+<meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/f5e44c749f5ee488df929c74a05add27.png">
+<meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/1e0ccbafc746cc55ada6b9a0523dccbb.png">
+<meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/5cd2aa3b5fff026637cb2e39ce142281.png">
+<meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/959cd3fcd1ec955273e203f7a6f30274.png">
+<meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/710bdb24444fed37d581a4de8b90ab2a.png">
+<meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/c7b3fd097f0a78869d8d1224d73a66dc.png">
+<meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/363220bbe249c69b2e34eb9b2c0a2d3a.png">
+<meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/57733ea2fab9bbf9a5a4f7b782562c4e.png">
+<meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/a89593ee475d9d420f3243b23f568f60.png">
+<meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/f4edd7695bd46820ea6f9757f32894eb.png">
+<meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/6455789da70241f9696910691bb869fa.png">
+<meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/d39240ca64a304dc310b7fef9529f357.png">
+<meta property="article:published_time" content="2020-05-25T12:49:35.000Z">
+<meta property="article:modified_time" content="2020-05-25T12:50:41.196Z">
+<meta property="article:author" content="ericson (杨晨)">
+<meta property="article:tag" content="innodb">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/16a15c4c8584761e10441c0031014a63.png">
+
+<link rel="canonical" href="http://yoursite.com/2020/05/25/innodb-storage/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-Hans'
+  };
+</script>
+
+  <title>InnoDB存储结构理解 | Ericson博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">Ericson博客</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+      <p class="site-subtitle" itemprop="description">每天努力一点点</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/05/25/innodb-storage/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/ericson1.jpg">
+      <meta itemprop="name" content="ericson (杨晨)">
+      <meta itemprop="description" content="道为术之灵，术为道之体；以道统术，以术得道；">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Ericson博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          InnoDB存储结构理解
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+              
+
+              <time title="Created: 2020-05-25 20:49:35 / Modified: 20:50:41" itemprop="dateCreated datePublished" datetime="2020-05-25T20:49:35+08:00">2020-05-25</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">In</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E6%95%B0%E6%8D%AE%E5%BA%93/" itemprop="url" rel="index"><span itemprop="name">数据库</span></a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="InnoDB体系架构"><a href="#InnoDB体系架构" class="headerlink" title="InnoDB体系架构"></a>InnoDB体系架构</h2><p>InnoDB是MySQL数据库中最常用的存储引擎，InnoDB的体系架构如下图所示：<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/16a15c4c8584761e10441c0031014a63.png" alt="InnoDB体系架构" width="500" height="313" align="center" /></p>
+<p>InnoDB体系架构主要包含三部分：后台线程，缓冲池，文件。</p>
+<h3 id="（一）后台线程"><a href="#（一）后台线程" class="headerlink" title="（一）后台线程"></a>（一）后台线程</h3><p>InnoDB使用多线程模型，后台线程主要分为四个线程：</p>
+<ul>
+<li>Master Thread： <code>最核心的一个线程，用于异步刷新缓冲页到磁盘，保证数据一致性；</code></li>
+<li>IO Thread： <code>InnoDB中使用了大量异步IO来处理IO请求，该线程主要负责这些IO请求的回调；</code></li>
+<li>Purge Thread： <code>该线程用来回收无用的undo页，InnoDB支持多个Purge线程回收undo页；</code></li>
+<li>Page Cleaner Thread： <code>负责脏页刷新到磁盘的操作，异步刷新；</code></li>
+</ul>
+<h3 id="（二）缓冲池"><a href="#（二）缓冲池" class="headerlink" title="（二）缓冲池"></a>（二）缓冲池</h3><p>InnoDB存储引擎是基于磁盘存储的，由于磁盘和CPU之间速度的鸿沟，InnoDB使用缓冲池来提高性能。InnoDB的数据存储都是以页为维度的，缓冲池中主要存放：</p>
+<ul>
+<li>数据页</li>
+<li>索引页</li>
+<li>undo页</li>
+<li>Change Buffer页</li>
+<li>自适应哈希索引</li>
+<li>锁信息</li>
+<li>数据字典信息</li>
+<li>redo日志</li>
+</ul>
+<h3 id="（三）磁盘文件"><a href="#（三）磁盘文件" class="headerlink" title="（三）磁盘文件"></a>（三）磁盘文件</h3><p>InnoDB存储引擎是基于磁盘的，所有的数据都存放在磁盘文件中，后续会分析数据如何存储？</p>
+<h2 id="InnoDB存储结构"><a href="#InnoDB存储结构" class="headerlink" title="InnoDB存储结构"></a>InnoDB存储结构</h2><blockquote>
+<p>InnoDB中每张表都有主键，如果没有显示的定义主键，会选择一个非空的唯一索引来做为主键；如果没有，则自动创建一个6字节大小的指针做主键。</p>
+</blockquote>
+<blockquote>
+<p>本篇文章基于的是MySQL5.7版本之后，因此一些弃用的特性就不介绍了，比如frm文件要来保存表结构元数据信息等。</p>
+</blockquote>
+<p>下文通过InnoDB逻辑存储结构和物理存储结构综合来介绍，主要解决下面两个问题：</p>
+<ul>
+<li>InnoDB逻辑上是怎么组织数据的？？？</li>
+<li>InnoDB逻辑上设计的存储结构怎么落地到物理存储上的？？？</li>
+</ul>
+<h3 id="逻辑-amp-物理存储结构"><a href="#逻辑-amp-物理存储结构" class="headerlink" title="逻辑&amp;物理存储结构"></a>逻辑&amp;物理存储结构</h3><p>InnoDB中所有数据都被存放在一个空间中，称之为“表空间（tablespace）”；表空间又由段（segment）、区（extent）、页（page）组成。</p>
+<p>先上图，InnoDB的逻辑存储结构如下图所示：<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/9c0f42905d6c2e00df917f8af6126cb1.png" alt="逻辑存储结构" width="500" height="300" align="center" /></p>
+<p><code>从图中可以看出，他们的层级关系是一对多，下面逐步介绍各个层级的逻辑结构！</code></p>
+<h4 id="1-表空间——Tablespace"><a href="#1-表空间——Tablespace" class="headerlink" title="1. 表空间——Tablespace"></a>1. 表空间——Tablespace</h4><p>表空间可以看做是InnoDB逻辑存储结构的最高层级；所有的数据都是存放在表空间中的。默认情况下，InnoDB的所有数据都存放在共享表空间中ibdata1；当用户设置参数<code>innodb_file_per_table</code>时，InnoDB会为每个表产生一个独立的表空间。</p>
+<blockquote>
+<p>独立的表空间中只存放数据，索引和Change Buffer；而其余的undo信息，事务信息，Double Write等还在共享表空间中。</p>
+</blockquote>
+<h5 id="（一）共享表空间"><a href="#（一）共享表空间" class="headerlink" title="（一）共享表空间"></a>（一）共享表空间</h5><p>共享表空间又叫做系统表空间（System Tablespace），默认的文件名为ibdata1。可以通过<code>innochecksum --page-type-summary ibdata1</code>命令查看共享表空间中存放了哪些文件类型。<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/d34a62025f56a46368f750f8f538f01a.png" alt="共享表空间文件类型" width="300" height="313" align="center" /></p>
+<p>在<code>innodb_file_per_table</code>参数开启后，共享表空间中的数据页（data page）移到了独立表空间中。ibdata1文件的初始大小为12M，磁盘上的文件都是以二进制的形式存储。在ibdata1文件中顺序的存放着不同种类的page。</p>
+<p>由于初始大小为12M，当保存的page信息增多时，共享表空间会继续生成新的文件来增长空间，比如ibdata2，ibdata3等等。当共享表空间暴增的时候会导致InnoDB的性能变差，那么何时会导致共享表空间大小暴增？？？<br>共享表空间中主要保存了undo信息和Change Buffer信息；因此大小暴增主要有下面两个原因：</p>
+<ul>
+<li>大事务，产生大量的undo页；</li>
+<li>索引建立过多，导致Change Buffer暴增；</li>
+</ul>
+<p>解决办法<br>对于大事务的undo页信息，InnoDB提供了解决办法，可以在共享表空间初始化的时候讲undo页分离出去；参数<code>innodb_undo_tablespaces</code>可以设置undo表空间的个数，后续所有的undo信息会保存在单独的undo表空间中。</p>
+<p><strong>共享表空间存储结构</strong><br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/788bcf3147d69f067716c729c79742a9.png" alt="共享表空间存储结构" width="400" height="313" align="center" /><br>具体的字节的详细含义此处略过，大体的结构如图所示。</p>
+<p><strong>优点</strong><br>表大小可以无限增大，可以跨文件存储，不同的文件可以存储在不同的磁盘上。<br><strong>缺点</strong><br>所有表的数据存放在一起，不易区分；当表删除回收后，会产生大量的空间碎片。</p>
+<h5 id="（二）独立表空间"><a href="#（二）独立表空间" class="headerlink" title="（二）独立表空间"></a>（二）独立表空间</h5><p>基于上述共享表空间的缺点，InnoDB支持为每个表建立一个独立表空间文件，文件名为”表名.ibd”。</p>
+<p><strong>独立表空间存储结构</strong><br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/97f1a146b2cd487e977a5419b173474c.png" alt="独立表空间存储结构" width="450" height="313" align="center" /></p>
+<p><strong>优点</strong><br>每个表独立存储自身的数据和索引，方便不同数据库的迁移；表被回收后，不影响其他表；表内的空间碎片相对较少。<br><strong>缺点</strong><br>单表的空间增长过大会导致存储空间不足，需要从操作系统层面来解决。</p>
+<h4 id="2-段——Segment"><a href="#2-段——Segment" class="headerlink" title="2. 段——Segment"></a>2. 段——Segment</h4><p>从逻辑结构图中可以看出，表空间包含多个段，其中最主要的是：</p>
+<ul>
+<li>数据段： <code>B+树叶子节点；</code></li>
+<li>索引段： <code>B+树非叶子节点；</code></li>
+<li>回滚段： <code>用来事务回滚；</code></li>
+</ul>
+<p><strong>段存储结构</strong><br>段在固定位置保存了区的元数据信息，其物理存储结构如下图所示：<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/f5e44c749f5ee488df929c74a05add27.png" alt="独立表空间存储结构" width="400" height="313" align="center" /></p>
+<h4 id="3-区——Extent"><a href="#3-区——Extent" class="headerlink" title="3. 区——Extent"></a>3. 区——Extent</h4><p>区是由连续页组成的空间，为保证区中页的连续性，InnoDB会一次性的从磁盘申请4~5个区。区根据描述符来管理自身的页数据，其结构如下：</p>
+<p><strong>区存储结构</strong><br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/1e0ccbafc746cc55ada6b9a0523dccbb.png" alt="独立表空间存储结构" width="300" height="100" align="center" /></p>
+<h4 id="4-页——Page"><a href="#4-页——Page" class="headerlink" title="4. 页——Page"></a>4. 页——Page</h4><p>页是InnoDB最基本的结构，也是磁盘管理的最小单位。页主要有以下几种：</p>
+<ul>
+<li>数据页</li>
+<li>索引页</li>
+<li>undo页</li>
+<li>系统页</li>
+<li>事务数据页</li>
+</ul>
+<p>这边主要讲解数据页和索引页，不说废话，先上图：<br><strong>页存储结构</strong><br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/5cd2aa3b5fff026637cb2e39ce142281.png" alt="页存储结构" width="300" height="100" align="center" /><br>页主要包含页头（38个字节），页尾（8个字节）以及中间的body，这很类似网络中包的结构，页头中包含了页的基本信息，页尾中包含了页数据的一些校验，下面看下页头和页尾的具体结构：</p>
+<p><strong>页头页尾存储结构</strong><br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/959cd3fcd1ec955273e203f7a6f30274.png" alt="页头页尾存储结构" width="300" height="290" align="center" /><br>从页头中发现，每个页都有一个int类型唯一的id，代表页的偏移量，由于int类型4个字节，这也导致了页最大为64TB（$2^{32}$）；此外页头中还包含两个重要的指针：Previous Page Number和Next Page Number，分别指向前一页和后一页，这样我们就知道了，在一个B+树的节点里，不同的页是通过链表来顺序遍历的；页尾主要用于数据一致性校验，checksum来检查数据的完整性。</p>
+<p>头尾的存储都介绍完毕了，就剩下body存储数据，数据都是以行（Row）记录的形式存储；由于页内部空闲空间是随机分配的，以链表来组织，因此需要界定下记录的开始和结尾，因此body的部分一开始有两个系统定义的头尾记录指针：infimum和supremum，用来保存记录的首尾，其结构如下图所示：</p>
+<p><strong>记录首尾存储结构</strong><br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/710bdb24444fed37d581a4de8b90ab2a.png" alt="记录首尾存储结构" width="300" height="290" align="center" /><br>infimum记录从<code>094</code>开始，依次到120以<code>supremum</code>结束。那<code>038</code>到<code>094</code>之前存储什么信息？？？</p>
+<blockquote>
+<p>主要存储的是索引头的信息，因为InnoDB中数据以B+树的形式存储。</p>
+</blockquote>
+<p>记录首尾相连的格式如下图：<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/c7b3fd097f0a78869d8d1224d73a66dc.png" alt="索引头存储结构" width="200" height="280" align="center" /></p>
+<p><strong>索引头存储结构</strong><br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/363220bbe249c69b2e34eb9b2c0a2d3a.png" alt="索引头存储结构" width="300" height="280" align="center" /><br>里面的信息不详细展开了。</p>
+<h4 id="5-行——Row"><a href="#5-行——Row" class="headerlink" title="5. 行——Row"></a>5. 行——Row</h4><p>千呼万唤始出来，绕了半天，终于讲到了行（Row）记录的存储结构；InnoDB支持不同类型的行格式来存储数据，如下图：<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/57733ea2fab9bbf9a5a4f7b782562c4e.png" alt="行格式" width="350" height="280" align="center" /><br>其中Antelope是文件最开始支持的形式，后续增加了Barracuda的格式;其中最常用的是Compact，下面主要介绍Compact格式。<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/a89593ee475d9d420f3243b23f568f60.png" alt="Compact格式" width="350" height="100" align="center" /><br>下面分析下各个字段的含义：</p>
+<ul>
+<li>变长字段长度列表： <code>主要用来存放变长字段的长度，逆序排列。</code><blockquote>
+<p>举例： 字段VARCHAR(16)，存储”abc”，则变长长度为03；把所有变长字段的长度逆序排列；</p>
+</blockquote>
+</li>
+<li>NULL标志位： <code>标志列是否为null；</code></li>
+<li>记录头信息：<img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/f4edd7695bd46820ea6f9757f32894eb.png" alt="记录头信息" width="500" height="120" align="center" />
+> record_type记录类型，3bit，000表示普通页；001表示B+树节点；010表示infimum；011表示supremum；1xx保留。</li>
+<li>列值： <code>真实的数据；</code><blockquote>
+<p>InnoDB会为每行数据添加隐藏的三个列值：</p>
+<ol>
+<li>DB_ROW_ID 行ID,唯一标识一条记录；</li>
+<li>DB_TRX_ID 事务ID；</li>
+<li>DB_ROLL_PTR  回滚指针；</li>
+</ol>
+</blockquote>
+</li>
+</ul>
+<p>由于页有大小限制，当数据库中存储TEXT,BLOB等大型数据时，上述的列值不能完整的存放下所有的数据，这个时候怎么办？？？<br>InnoDB会生成一个BLOB的新页，然后在该列值上存放新页的地址来指向它。Compact格式会存储开头的768bytes。<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/6455789da70241f9696910691bb869fa.png" alt="记录头信息" width="300" height="120" align="center" /></p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本文主要介绍了InnoDB存储的逻辑结构和物理结构；说白了就是在文件中用链表实现了B+树；为了让计算机识别二进制数据，在记录的头部和尾部包装了各式各样的元信息；为了便于InnoDB各种关键特性的实现，又将头部尾部的元信息分层：segment，extent，page，row。<br>逻辑结构和物理结构的映射如下图：<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/d39240ca64a304dc310b7fef9529f357.png" alt="逻辑物理结构映射" width="400" height="300" align="center" /></p>
+<h2 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h2><p>[1] MySQL技术内幕：InnoDB存储引擎<br>[2] MySQL官方文档<br>[3] 博客</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/innodb/" rel="tag"># innodb</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/05/25/innodb-features/" rel="prev" title="浅尝InnoDB关键特性">
+      <i class="fa fa-chevron-left"></i> 浅尝InnoDB关键特性
+    </a></div>
+      <div class="post-nav-item"></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#InnoDB体系架构"><span class="nav-number">1.</span> <span class="nav-text">InnoDB体系架构</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#（一）后台线程"><span class="nav-number">1.1.</span> <span class="nav-text">（一）后台线程</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#（二）缓冲池"><span class="nav-number">1.2.</span> <span class="nav-text">（二）缓冲池</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#（三）磁盘文件"><span class="nav-number">1.3.</span> <span class="nav-text">（三）磁盘文件</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#InnoDB存储结构"><span class="nav-number">2.</span> <span class="nav-text">InnoDB存储结构</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#逻辑-amp-物理存储结构"><span class="nav-number">2.1.</span> <span class="nav-text">逻辑&amp;物理存储结构</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#1-表空间——Tablespace"><span class="nav-number">2.1.1.</span> <span class="nav-text">1. 表空间——Tablespace</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#（一）共享表空间"><span class="nav-number">2.1.1.1.</span> <span class="nav-text">（一）共享表空间</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#（二）独立表空间"><span class="nav-number">2.1.1.2.</span> <span class="nav-text">（二）独立表空间</span></a></li></ol></li><li class="nav-item nav-level-4"><a class="nav-link" href="#2-段——Segment"><span class="nav-number">2.1.2.</span> <span class="nav-text">2. 段——Segment</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-区——Extent"><span class="nav-number">2.1.3.</span> <span class="nav-text">3. 区——Extent</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#4-页——Page"><span class="nav-number">2.1.4.</span> <span class="nav-text">4. 页——Page</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#5-行——Row"><span class="nav-number">2.1.5.</span> <span class="nav-text">5. 行——Row</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#总结"><span class="nav-number">3.</span> <span class="nav-text">总结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#参考"><span class="nav-number">4.</span> <span class="nav-text">参考</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="ericson (杨晨)"
+      src="/images/ericson1.jpg">
+  <p class="site-author-name" itemprop="name">ericson (杨晨)</p>
+  <div class="site-description" itemprop="description">道为术之灵，术为道之体；以道统术，以术得道；</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">6</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">4</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">5</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2020</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">ericson (杨晨)</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a>
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script size="300" alpha="0.6" zIndex="-1" src="//cdn.jsdelivr.net/gh/theme-next/theme-next-canvas-ribbon@1/canvas-ribbon.js"></script>
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+  <script defer src="//cdn.jsdelivr.net/gh/theme-next/theme-next-three@1/three.min.js"></script>
+    <script defer src="//cdn.jsdelivr.net/gh/theme-next/theme-next-three@latest/three-waves.min.js"></script>
+    <script defer src="//cdn.jsdelivr.net/gh/theme-next/theme-next-three@latest/canvas_lines.min.js"></script>
+    <script defer src="//cdn.jsdelivr.net/gh/theme-next/theme-next-three@latest/canvas_sphere.min.js"></script>
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

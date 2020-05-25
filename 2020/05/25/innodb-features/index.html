@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.2.1">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"yoursite.com","root":"/","scheme":"Gemini","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="InnoDB概念MySQL是当前最流行的关系型数据库。MySQL的体系架构如下图所示： MySQL架构：  Connectors：MySQL向外提供的交互接口：   Java等语言可以通过该接口实现和SQL的交互，操作SQL语句。  Management Service &amp; Utilities：管理服务组件和工具组件：   提供对MySQL的集成管理，包括：备份，恢复，安全管理等。  Co">
+<meta property="og:type" content="article">
+<meta property="og:title" content="浅尝InnoDB关键特性">
+<meta property="og:url" content="http://yoursite.com/2020/05/25/innodb-features/index.html">
+<meta property="og:site_name" content="Ericson博客">
+<meta property="og:description" content="InnoDB概念MySQL是当前最流行的关系型数据库。MySQL的体系架构如下图所示： MySQL架构：  Connectors：MySQL向外提供的交互接口：   Java等语言可以通过该接口实现和SQL的交互，操作SQL语句。  Management Service &amp; Utilities：管理服务组件和工具组件：   提供对MySQL的集成管理，包括：备份，恢复，安全管理等。  Co">
+<meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/8eda0e45c2b030b5371bc2742255fbf4.png">
+<meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/cdd1b6d676bbc9491896daa94bf1656a.png">
+<meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/7dd6b4f929b0dfbf9e9d6aa0e551f41d.png">
+<meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/2901794483581af0b90be5dc29cbc162.png">
+<meta property="article:published_time" content="2020-05-25T12:48:31.000Z">
+<meta property="article:modified_time" content="2020-05-25T12:49:14.540Z">
+<meta property="article:author" content="ericson (杨晨)">
+<meta property="article:tag" content="innodb">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/8eda0e45c2b030b5371bc2742255fbf4.png">
+
+<link rel="canonical" href="http://yoursite.com/2020/05/25/innodb-features/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-Hans'
+  };
+</script>
+
+  <title>浅尝InnoDB关键特性 | Ericson博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">Ericson博客</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+      <p class="site-subtitle" itemprop="description">每天努力一点点</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/05/25/innodb-features/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/ericson1.jpg">
+      <meta itemprop="name" content="ericson (杨晨)">
+      <meta itemprop="description" content="道为术之灵，术为道之体；以道统术，以术得道；">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Ericson博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          浅尝InnoDB关键特性
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+              
+
+              <time title="Created: 2020-05-25 20:48:31 / Modified: 20:49:14" itemprop="dateCreated datePublished" datetime="2020-05-25T20:48:31+08:00">2020-05-25</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">In</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E6%95%B0%E6%8D%AE%E5%BA%93/" itemprop="url" rel="index"><span itemprop="name">数据库</span></a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="InnoDB概念"><a href="#InnoDB概念" class="headerlink" title="InnoDB概念"></a>InnoDB概念</h2><p>MySQL是当前最流行的关系型数据库。MySQL的体系架构如下图所示：<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/8eda0e45c2b030b5371bc2742255fbf4.png" alt="MySQL架构"></p>
+<p>MySQL架构：</p>
+<ul>
+<li><p>Connectors：MySQL向外提供的交互接口：</p>
+<p>  Java等语言可以通过该接口实现和SQL的交互，操作SQL语句。</p>
+</li>
+<li><p>Management Service &amp; Utilities：管理服务组件和工具组件：</p>
+<p>  提供对MySQL的集成管理，包括：备份，恢复，安全管理等。</p>
+</li>
+<li><p>Connection Pool：连接池组件：</p>
+<p>  负责监听客户端到MySQL的请求，创建线程负责之间的通信。</p>
+</li>
+<li><p>SQL Interface：SQL接口组件：</p>
+<p>  接收客户端的SQL命令，将结果返回客户端。</p>
+</li>
+<li><p>Parser：查询分析器组件：</p>
+<p>  分析SQL的合法性，并解析SQL的数据结构。</p>
+</li>
+<li><p>Optimizer：优化器组件：</p>
+<p>  对SQL进行优化分析。</p>
+</li>
+<li><p>Caches &amp; Buffers：缓存组件：</p>
+<p>  SQL结果等缓存。</p>
+</li>
+<li><p>Pluggable Storage Engine：插拔式存储引擎：</p>
+<p>  可插拔式的存储引擎，用于表的创建，数据检索，索引创建等；也可满足自定义的存储引擎开发。</p>
+</li>
+<li><p>File System：物理文件：</p>
+<p>  实际存储数据的文件。</p>
+</li>
+<li><p>Files &amp; Logs：文件和日志：</p>
+<p>  存储各式各样的日志文件。</p>
+</li>
+</ul>
+<p>其中MySQL的关键特点就是可插拔的存储引擎；其中InnoDB是MySQL的默认存储引擎，也是应用最为广泛的存储存储引擎，本文主要介绍InnoDB存储引擎的关键特性以及这些特性的一些思考。</p>
+<blockquote>
+<p>数据库和数据实例的区别：</p>
+<ul>
+<li>数据库是文件的集合，是依照某种数据模型组织起来并存放于二级存储器中的数据集合；</li>
+<li>数据库实例是程序，是位于用户与操作系统之间的一层数据管理软件；</li>
+</ul>
+</blockquote>
+<h2 id="InnoDB关键特性"><a href="#InnoDB关键特性" class="headerlink" title="InnoDB关键特性"></a>InnoDB关键特性</h2><p>InnoDB有以下关键特性，其中前三个是数据库最通用的特性：</p>
+<ul>
+<li>Change Buffer（写缓存）</li>
+<li>Double Write（二次写）</li>
+<li>Adaptive Hash Index（自适应哈希索引）</li>
+<li>Async IO（异步IO）</li>
+<li>Flush Neighbor Page（属性邻接页）</li>
+</ul>
+<h3 id="1-Change-Buffer"><a href="#1-Change-Buffer" class="headerlink" title="1. Change Buffer"></a>1. Change Buffer</h3><p>Change Buffer是InnoDB中最特殊的一个特性。Change Buffer是从InnoDB 1.0.x版本之后的引入的概念，在1.0.x版本之前叫Insert Buffer（插入缓存）。Insert Buffer顾名思义是针对Insert的缓存。</p>
+<h4 id="1-1-问题诞生背景"><a href="#1-1-问题诞生背景" class="headerlink" title="1.1 问题诞生背景"></a>1.1 问题诞生背景</h4><blockquote>
+<p>对于InnoDB，所有的数据，索引等都是以文件的形式存储，以B+树的形式存储。<br>InnoDB的索引分为两种：聚簇索引（Primary Index）和非聚簇索引（Secondary Index）；其中聚簇索引的B+树叶子节点存放的是真实的数据；而非聚簇索引的叶子节点存放的是聚簇索引的主键值。</p>
+</blockquote>
+<p>我们先从索引的角度来描述下问题的背景：</p>
+<ul>
+<li>对于聚簇索引，主键是唯一的；当插入新的数据时，需要检查下磁盘是否有主键冲突，这步磁盘访问必不可少；此外，一般对于主键的插入是顺序的（比如id自增列），这样磁盘是顺序读写的，有较好的性能。</li>
+<li>对于非聚簇索引，列值不唯一；当插入新的数据时，插入的数据很难是按递增的顺序插入的，这时候对于插入操作都是随机的；如果有大量的插入操作，则会有大量的随机IO，会严重影响磁盘的性能。</li>
+</ul>
+<p>因此Insert Buffer诞生的问题背景是： <strong>大量的非聚簇索引插入操作？？？</strong></p>
+<blockquote>
+<p>产生的问题背景也反映了Insert Buffer需要满足两点：</p>
+</blockquote>
+<ul>
+<li>必须是非聚簇索引；</li>
+<li>索引的数据不是唯一的；（后面也会有介绍）</li>
+</ul>
+<h4 id="1-2-内部实现"><a href="#1-2-内部实现" class="headerlink" title="1.2 内部实现"></a>1.2 内部实现</h4><blockquote>
+<ol>
+<li>MySQL数据存储包含内存和磁盘两部分；</li>
+<li>内存缓冲池以页（Page）为单位，缓存最热的是：数据页和索引页；</li>
+<li>InnoDB以变种LRU（加了mid位置和时间的概念，非常类似于JVM的内存管理）的算法来管理缓冲池，解决了“预读失效”和“缓冲池污染”的问题；</li>
+</ol>
+</blockquote>
+<p>（1）情况一<br>当要插入的数据已经在缓冲池了，则只需要插入redo日志文件一次磁盘操作；但redo的磁盘是顺序写，效率很高；因此这种情况不需要Insert Buffer。</p>
+<blockquote>
+<p>缓冲池会定期的刷新到磁盘上，而不是每次都刷新，这样会降低磁盘的IO，提升性能，说白了就是批量写（可能会有同一个数据页的合并操作）。</p>
+</blockquote>
+<p>（2）情况二<br>当要插入的数据不再缓冲池中，这时候需要怎么办？<br>为了避免大量的随机IO，提出了Insert Buffer的概念；当插入数据时，先把数据插入到Insert Buffer中；当需要回刷磁盘时，会把Insert Buffer中的数据进行merge后写入磁盘（因为有merge，为了表示现有页的空闲空间，还需要一个特殊的页来保存每个非聚簇索引页的空闲空间），降低了磁盘随机IO。Insert Buffer也是B+树的结构，插入数据时也是按照页来组织聚簇索引和非聚簇索引数据。</p>
+<blockquote>
+<p>举个形象的例子来说明Insert Buffer的具体作用：<br>图书管理员进行书籍整理，有两种做法：</p>
+</blockquote>
+<ul>
+<li>每归还一本书，就去对应的书架上归还这本书；</li>
+<li>先把书放在柜台，等书达到一定量的时候，进行批量的放回对应的书架；</li>
+</ul>
+<blockquote>
+<p>正常人都会选择第二种做法；而柜台就是Insert Buffer，归还的书会先在柜台上进行整理，合并，然后一起放回书架，减少了书架的随机访问。</p>
+</blockquote>
+<blockquote>
+<p>在MySQL5.5之后，不仅针对insert操作，还针对update和delete操作，改名为Change Buffer,原理是一致的。</p>
+</blockquote>
+<p>Change Buffer还有一个细节点，当Change Buffer中的有数据没有写到磁盘前，数据库宕机了，这个时候Change Buffer的数据就恢复不了了，因此鉴于这种情况，InnoDB会把Change Buffer中的数据定期通过merge操作刷回表空间中的索引文件。</p>
+<p>Change Buffer结构图:<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/cdd1b6d676bbc9491896daa94bf1656a.png" alt="Change Buffer"></p>
+<p>从图中可以看出，Change Buffer并不仅仅指的是内存中的一块，还包含了物理磁盘上的共享表空间。</p>
+<h4 id="1-3-缺点"><a href="#1-3-缺点" class="headerlink" title="1.3 缺点"></a>1.3 缺点</h4><ul>
+<li>如果有大量的DML变更操作，数据宕机后，会导致恢复的时间较长；</li>
+<li>有大量插入的时候，会导致占用较多的Buffer Pool内存，会影响其他数据的空间；</li>
+<li>对于不同的硬件配置和负载，Change Buffer无法进行控制，比如磁盘和SSD；</li>
+</ul>
+<h3 id="2-Double-Write"><a href="#2-Double-Write" class="headerlink" title="2. Double Write"></a>2. Double Write</h3><p>从IO的角度来看，InnoDB是以页为维度来读取数据，正常InnoDB的页可以配置为4K，8K，16K;而文件系统的IO读写最小单位是4K，也有些是1K；磁盘的读写最小单位是扇区（512KB）。</p>
+<p>由于各系统以及硬件IO读写的单位不一致，往往底层的单位要小于上层的单位，因此上层就会存在部分写的场景：当写一部分数据的时候，机器宕机了，这样就会导致部分写的场景。（磁盘是由硬件保证，要么512KB全部写成功，要么都失败，不存在部分写的场景）</p>
+<h4 id="2-1-问题诞生背景"><a href="#2-1-问题诞生背景" class="headerlink" title="2.1 问题诞生背景"></a>2.1 问题诞生背景</h4><p>由上述知道，InnoDB的IO最小单位是页,正常大小为16K（可以配置为4K，8K等）；当缓冲池中的脏页回写磁盘时，磁盘的页和缓冲池的页是对等的，也就是要回写16K的数据到磁盘；而文件系统的读写单位可能是4K；这样就需要写入4次，才能完整的把脏页刷回去；如果在写2次的时候，机器断电宕机了，这个时候磁盘的页就被污染了。</p>
+<p>基于这种场景，InnoDB诞生了Double Write的特性，用于解决partial page write（部分写）的问题。</p>
+<h4 id="2-2-内部实现"><a href="#2-2-内部实现" class="headerlink" title="2.2 内部实现"></a>2.2 内部实现</h4><p>参考Change Buffer的设计，Double Write也在Buffer Pool中开辟一块内存，用来存放修改的脏页；并在磁盘的共享表中间中存放脏页，Double Write的逻辑如下图所示：<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/7dd6b4f929b0dfbf9e9d6aa0e551f41d.png" alt="Double Write"></p>
+<p>Double Write的步骤：</p>
+<ol>
+<li>当触发脏页刷新时，先把脏页拷贝到Double Write内存中；</li>
+<li>接着把Double Write中的脏页顺序的写到共享表空间中，这部分是顺序写入磁盘，性能很高；</li>
+<li>异步的将共享表空间的数据离散的写入到各个表空间中；</li>
+</ol>
+<p>Double Write如何宕机恢复的？？？</p>
+<ul>
+<li>如果写入Double Write Buffer时失败，这个时候页还没有刷新回磁盘，也就没有发生部分写的问题，因此直接从磁盘加载原始数据，并通过事务日志重新计算写入Double Write Buffer。</li>
+<li>如果写入磁盘时，宕机，由于共享表空间中副本数据恢复，重新写入磁盘即可。</li>
+</ul>
+<blockquote>
+<p>为啥不用redo log解决部分写的问题？？？<br>这个涉及到redo log的数据设计；如果redo log中保存了所有的数据和操作，那么redo log的size会非常大，不利于日志文件存储；因此InnoDB对于redo log的设计是保存页的指针之类的数据；因此redo log无法恢复物理页，因为redo log中不保存真实的数据。</p>
+</blockquote>
+<h4 id="2-3-缺点"><a href="#2-3-缺点" class="headerlink" title="2.3 缺点"></a>2.3 缺点</h4><p>虽然共享表空间的写入是磁盘顺序写，但依然会影响MySQL的性能；尤其是InnoDB为了保证写入共享表空间数据的完整性，在每次写入后都会调用fsync操作等待磁盘操作结束，硬盘的fsync性能比较慢；</p>
+<h3 id="3-Adaptive-Hash-Index"><a href="#3-Adaptive-Hash-Index" class="headerlink" title="3. Adaptive Hash Index"></a>3. Adaptive Hash Index</h3><p>自适应哈希索引是InnoDB内部的一个优化特性，一般不需要开发人员关注。</p>
+<h4 id="3-1-问题诞生背景"><a href="#3-1-问题诞生背景" class="headerlink" title="3.1 问题诞生背景"></a>3.1 问题诞生背景</h4><p>首先了解下InnoDB的数据存储，InnoDB的数据和主键索引一起存储，主键索引的叶子节点存放的是数据；非主键索引叶子节点存放的是主键的key值。</p>
+<p>当通过非聚簇索引来查询数据时，根据B+索引树查询叶子节点的主键key,然后根据主键key再去主键索引的B+树上找到对应的叶子节点的数据。</p>
+<p>可以看出来通过非聚簇索引来查询数据时，需要访问两个B+树，而自适应哈希索引就是为了解决这个问题，直接构造非聚簇索引key到真实数据的哈希索引，哈希的时间复杂度是O（1）；因此减少了两次B+树的查询操作。</p>
+<p><strong>自适应哈希索引是索引的索引 ！！！</strong></p>
+<h4 id="3-2-内部实现"><a href="#3-2-内部实现" class="headerlink" title="3.2 内部实现"></a>3.2 内部实现</h4><p>自适应哈希索引的难点在于信息统计，要统计出查询的热点数据，为这些热点数据建立哈希索引。比如对于同一条件的频繁访问，可以构造出哈希索引，下次同样的条件可以直接获取结果。</p>
+<p>自适应哈希索引的结构如下图所示：<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/2901794483581af0b90be5dc29cbc162.png" alt="自适应哈希索引"></p>
+<p>自适应哈希索引实现的条件：</p>
+<ol>
+<li>精确条件查询，以该条件查询超过100次；</li>
+<li>页访问的次数N=页记录数/16；<br>(内部具体的信息统计涉及很多参数，后续分析)</li>
+</ol>
+<h4 id="3-3-缺点"><a href="#3-3-缺点" class="headerlink" title="3.3 缺点"></a>3.3 缺点</h4><ol>
+<li>自适应哈希索引也是占用Buffer Pool的空间，会影响其他类型数据的空间容量；</li>
+<li>自适应哈希索引只支持精确条件查询，不支持范围查找；</li>
+<li>自适应哈希索引只有在极端的情况下（大量固定条件的查询），才有意义，降低逻辑读时间；</li>
+</ol>
+<h3 id="4-Async-IO"><a href="#4-Async-IO" class="headerlink" title="4. Async IO"></a>4. Async IO</h3><p>为了提供磁盘操作性能，现在的数据库系统都是采用异步IO的方式来处理磁盘操作。异步IO还支持批量操作，把多个页进行整合一起进行IO操作，如果是同一页的数据，或者连续的数据，会提高磁盘的IO性能。</p>
+<h3 id="5-Flush-Neighbor-Page"><a href="#5-Flush-Neighbor-Page" class="headerlink" title="5. Flush Neighbor Page"></a>5. Flush Neighbor Page</h3><p>刷新邻接页是根据“局部性”原理，其工作原理是：<br>当刷新一个脏页时，InnoDB存储引擎会检测该页所在区（extent）的所有页，如果是脏页，那么一起进行刷新。这样做的好处显而易见，通过AIO可以将多个IO写入操作合并为一个IO操作，故该工作机制在传统机械磁盘下有着显著的优势。</p>
+<blockquote>
+<p>InnoDB文件的格式是idb后缀，其中存放了表的数据，又称为表空间Tablespace，表空间又分为多个段Segment；一个Segment又分为多个区Extent；一个区又分为多个页Page；一个页包含了多个行Row。</p>
+</blockquote>
+<h2 id="后记"><a href="#后记" class="headerlink" title="后记"></a>后记</h2><p>InnoDB的关键特性和文件的存储结果密切相关，后面会分析下InnoDB表数据的文件存储结构。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/innodb/" rel="tag"># innodb</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/05/25/memory-manager/" rel="prev" title="从种地到内存管理的哲学原理">
+      <i class="fa fa-chevron-left"></i> 从种地到内存管理的哲学原理
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2020/05/25/innodb-storage/" rel="next" title="InnoDB存储结构理解">
+      InnoDB存储结构理解 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#InnoDB概念"><span class="nav-number">1.</span> <span class="nav-text">InnoDB概念</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#InnoDB关键特性"><span class="nav-number">2.</span> <span class="nav-text">InnoDB关键特性</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#1-Change-Buffer"><span class="nav-number">2.1.</span> <span class="nav-text">1. Change Buffer</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#1-1-问题诞生背景"><span class="nav-number">2.1.1.</span> <span class="nav-text">1.1 问题诞生背景</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#1-2-内部实现"><span class="nav-number">2.1.2.</span> <span class="nav-text">1.2 内部实现</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#1-3-缺点"><span class="nav-number">2.1.3.</span> <span class="nav-text">1.3 缺点</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-Double-Write"><span class="nav-number">2.2.</span> <span class="nav-text">2. Double Write</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#2-1-问题诞生背景"><span class="nav-number">2.2.1.</span> <span class="nav-text">2.1 问题诞生背景</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#2-2-内部实现"><span class="nav-number">2.2.2.</span> <span class="nav-text">2.2 内部实现</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#2-3-缺点"><span class="nav-number">2.2.3.</span> <span class="nav-text">2.3 缺点</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3-Adaptive-Hash-Index"><span class="nav-number">2.3.</span> <span class="nav-text">3. Adaptive Hash Index</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#3-1-问题诞生背景"><span class="nav-number">2.3.1.</span> <span class="nav-text">3.1 问题诞生背景</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-2-内部实现"><span class="nav-number">2.3.2.</span> <span class="nav-text">3.2 内部实现</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-3-缺点"><span class="nav-number">2.3.3.</span> <span class="nav-text">3.3 缺点</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#4-Async-IO"><span class="nav-number">2.4.</span> <span class="nav-text">4. Async IO</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#5-Flush-Neighbor-Page"><span class="nav-number">2.5.</span> <span class="nav-text">5. Flush Neighbor Page</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#后记"><span class="nav-number">3.</span> <span class="nav-text">后记</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="ericson (杨晨)"
+      src="/images/ericson1.jpg">
+  <p class="site-author-name" itemprop="name">ericson (杨晨)</p>
+  <div class="site-description" itemprop="description">道为术之灵，术为道之体；以道统术，以术得道；</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">6</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">4</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">5</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2020</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">ericson (杨晨)</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a>
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script size="300" alpha="0.6" zIndex="-1" src="//cdn.jsdelivr.net/gh/theme-next/theme-next-canvas-ribbon@1/canvas-ribbon.js"></script>
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+  <script defer src="//cdn.jsdelivr.net/gh/theme-next/theme-next-three@1/three.min.js"></script>
+    <script defer src="//cdn.jsdelivr.net/gh/theme-next/theme-next-three@latest/three-waves.min.js"></script>
+    <script defer src="//cdn.jsdelivr.net/gh/theme-next/theme-next-three@latest/canvas_lines.min.js"></script>
+    <script defer src="//cdn.jsdelivr.net/gh/theme-next/theme-next-three@latest/canvas_sphere.min.js"></script>
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>
