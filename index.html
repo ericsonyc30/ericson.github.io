@@ -162,6 +162,63 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/05/25/red-black-tree/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/ericson1.jpg">
+      <meta itemprop="name" content="ericson (杨晨)">
+      <meta itemprop="description" content="道为术之灵，术为道之体；以道统术，以术得道；">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Ericson博客">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2020/05/25/red-black-tree/" class="post-title-link" itemprop="url">red-black-tree</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2020-05-25 21:16:08" itemprop="dateCreated datePublished" datetime="2020-05-25T21:16:08+08:00">2020-05-25</time>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
     <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/05/25/innodb-storage/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -187,7 +244,7 @@
               <span class="post-meta-item-text">Posted on</span>
               
 
-              <time title="Created: 2020-05-25 20:49:35 / Modified: 20:50:41" itemprop="dateCreated datePublished" datetime="2020-05-25T20:49:35+08:00">2020-05-25</time>
+              <time title="Created: 2020-05-25 20:49:35 / Modified: 20:58:14" itemprop="dateCreated datePublished" datetime="2020-05-25T20:49:35+08:00">2020-05-25</time>
             </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -230,87 +287,14 @@
 <li>数据字典信息</li>
 <li>redo日志</li>
 </ul>
-<h3 id="（三）磁盘文件"><a href="#（三）磁盘文件" class="headerlink" title="（三）磁盘文件"></a>（三）磁盘文件</h3><p>InnoDB存储引擎是基于磁盘的，所有的数据都存放在磁盘文件中，后续会分析数据如何存储？</p>
-<h2 id="InnoDB存储结构"><a href="#InnoDB存储结构" class="headerlink" title="InnoDB存储结构"></a>InnoDB存储结构</h2><blockquote>
-<p>InnoDB中每张表都有主键，如果没有显示的定义主键，会选择一个非空的唯一索引来做为主键；如果没有，则自动创建一个6字节大小的指针做主键。</p>
-</blockquote>
-<blockquote>
-<p>本篇文章基于的是MySQL5.7版本之后，因此一些弃用的特性就不介绍了，比如frm文件要来保存表结构元数据信息等。</p>
-</blockquote>
-<p>下文通过InnoDB逻辑存储结构和物理存储结构综合来介绍，主要解决下面两个问题：</p>
-<ul>
-<li>InnoDB逻辑上是怎么组织数据的？？？</li>
-<li>InnoDB逻辑上设计的存储结构怎么落地到物理存储上的？？？</li>
-</ul>
-<h3 id="逻辑-amp-物理存储结构"><a href="#逻辑-amp-物理存储结构" class="headerlink" title="逻辑&amp;物理存储结构"></a>逻辑&amp;物理存储结构</h3><p>InnoDB中所有数据都被存放在一个空间中，称之为“表空间（tablespace）”；表空间又由段（segment）、区（extent）、页（page）组成。</p>
-<p>先上图，InnoDB的逻辑存储结构如下图所示：<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/9c0f42905d6c2e00df917f8af6126cb1.png" alt="逻辑存储结构" width="500" height="300" align="center" /></p>
-<p><code>从图中可以看出，他们的层级关系是一对多，下面逐步介绍各个层级的逻辑结构！</code></p>
-<h4 id="1-表空间——Tablespace"><a href="#1-表空间——Tablespace" class="headerlink" title="1. 表空间——Tablespace"></a>1. 表空间——Tablespace</h4><p>表空间可以看做是InnoDB逻辑存储结构的最高层级；所有的数据都是存放在表空间中的。默认情况下，InnoDB的所有数据都存放在共享表空间中ibdata1；当用户设置参数<code>innodb_file_per_table</code>时，InnoDB会为每个表产生一个独立的表空间。</p>
-<blockquote>
-<p>独立的表空间中只存放数据，索引和Change Buffer；而其余的undo信息，事务信息，Double Write等还在共享表空间中。</p>
-</blockquote>
-<h5 id="（一）共享表空间"><a href="#（一）共享表空间" class="headerlink" title="（一）共享表空间"></a>（一）共享表空间</h5><p>共享表空间又叫做系统表空间（System Tablespace），默认的文件名为ibdata1。可以通过<code>innochecksum --page-type-summary ibdata1</code>命令查看共享表空间中存放了哪些文件类型。<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/d34a62025f56a46368f750f8f538f01a.png" alt="共享表空间文件类型" width="300" height="313" align="center" /></p>
-<p>在<code>innodb_file_per_table</code>参数开启后，共享表空间中的数据页（data page）移到了独立表空间中。ibdata1文件的初始大小为12M，磁盘上的文件都是以二进制的形式存储。在ibdata1文件中顺序的存放着不同种类的page。</p>
-<p>由于初始大小为12M，当保存的page信息增多时，共享表空间会继续生成新的文件来增长空间，比如ibdata2，ibdata3等等。当共享表空间暴增的时候会导致InnoDB的性能变差，那么何时会导致共享表空间大小暴增？？？<br>共享表空间中主要保存了undo信息和Change Buffer信息；因此大小暴增主要有下面两个原因：</p>
-<ul>
-<li>大事务，产生大量的undo页；</li>
-<li>索引建立过多，导致Change Buffer暴增；</li>
-</ul>
-<p>解决办法<br>对于大事务的undo页信息，InnoDB提供了解决办法，可以在共享表空间初始化的时候讲undo页分离出去；参数<code>innodb_undo_tablespaces</code>可以设置undo表空间的个数，后续所有的undo信息会保存在单独的undo表空间中。</p>
-<p><strong>共享表空间存储结构</strong><br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/788bcf3147d69f067716c729c79742a9.png" alt="共享表空间存储结构" width="400" height="313" align="center" /><br>具体的字节的详细含义此处略过，大体的结构如图所示。</p>
-<p><strong>优点</strong><br>表大小可以无限增大，可以跨文件存储，不同的文件可以存储在不同的磁盘上。<br><strong>缺点</strong><br>所有表的数据存放在一起，不易区分；当表删除回收后，会产生大量的空间碎片。</p>
-<h5 id="（二）独立表空间"><a href="#（二）独立表空间" class="headerlink" title="（二）独立表空间"></a>（二）独立表空间</h5><p>基于上述共享表空间的缺点，InnoDB支持为每个表建立一个独立表空间文件，文件名为”表名.ibd”。</p>
-<p><strong>独立表空间存储结构</strong><br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/97f1a146b2cd487e977a5419b173474c.png" alt="独立表空间存储结构" width="450" height="313" align="center" /></p>
-<p><strong>优点</strong><br>每个表独立存储自身的数据和索引，方便不同数据库的迁移；表被回收后，不影响其他表；表内的空间碎片相对较少。<br><strong>缺点</strong><br>单表的空间增长过大会导致存储空间不足，需要从操作系统层面来解决。</p>
-<h4 id="2-段——Segment"><a href="#2-段——Segment" class="headerlink" title="2. 段——Segment"></a>2. 段——Segment</h4><p>从逻辑结构图中可以看出，表空间包含多个段，其中最主要的是：</p>
-<ul>
-<li>数据段： <code>B+树叶子节点；</code></li>
-<li>索引段： <code>B+树非叶子节点；</code></li>
-<li>回滚段： <code>用来事务回滚；</code></li>
-</ul>
-<p><strong>段存储结构</strong><br>段在固定位置保存了区的元数据信息，其物理存储结构如下图所示：<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/f5e44c749f5ee488df929c74a05add27.png" alt="独立表空间存储结构" width="400" height="313" align="center" /></p>
-<h4 id="3-区——Extent"><a href="#3-区——Extent" class="headerlink" title="3. 区——Extent"></a>3. 区——Extent</h4><p>区是由连续页组成的空间，为保证区中页的连续性，InnoDB会一次性的从磁盘申请4~5个区。区根据描述符来管理自身的页数据，其结构如下：</p>
-<p><strong>区存储结构</strong><br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/1e0ccbafc746cc55ada6b9a0523dccbb.png" alt="独立表空间存储结构" width="300" height="100" align="center" /></p>
-<h4 id="4-页——Page"><a href="#4-页——Page" class="headerlink" title="4. 页——Page"></a>4. 页——Page</h4><p>页是InnoDB最基本的结构，也是磁盘管理的最小单位。页主要有以下几种：</p>
-<ul>
-<li>数据页</li>
-<li>索引页</li>
-<li>undo页</li>
-<li>系统页</li>
-<li>事务数据页</li>
-</ul>
-<p>这边主要讲解数据页和索引页，不说废话，先上图：<br><strong>页存储结构</strong><br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/5cd2aa3b5fff026637cb2e39ce142281.png" alt="页存储结构" width="300" height="100" align="center" /><br>页主要包含页头（38个字节），页尾（8个字节）以及中间的body，这很类似网络中包的结构，页头中包含了页的基本信息，页尾中包含了页数据的一些校验，下面看下页头和页尾的具体结构：</p>
-<p><strong>页头页尾存储结构</strong><br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/959cd3fcd1ec955273e203f7a6f30274.png" alt="页头页尾存储结构" width="300" height="290" align="center" /><br>从页头中发现，每个页都有一个int类型唯一的id，代表页的偏移量，由于int类型4个字节，这也导致了页最大为64TB（$2^{32}$）；此外页头中还包含两个重要的指针：Previous Page Number和Next Page Number，分别指向前一页和后一页，这样我们就知道了，在一个B+树的节点里，不同的页是通过链表来顺序遍历的；页尾主要用于数据一致性校验，checksum来检查数据的完整性。</p>
-<p>头尾的存储都介绍完毕了，就剩下body存储数据，数据都是以行（Row）记录的形式存储；由于页内部空闲空间是随机分配的，以链表来组织，因此需要界定下记录的开始和结尾，因此body的部分一开始有两个系统定义的头尾记录指针：infimum和supremum，用来保存记录的首尾，其结构如下图所示：</p>
-<p><strong>记录首尾存储结构</strong><br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/710bdb24444fed37d581a4de8b90ab2a.png" alt="记录首尾存储结构" width="300" height="290" align="center" /><br>infimum记录从<code>094</code>开始，依次到120以<code>supremum</code>结束。那<code>038</code>到<code>094</code>之前存储什么信息？？？</p>
-<blockquote>
-<p>主要存储的是索引头的信息，因为InnoDB中数据以B+树的形式存储。</p>
-</blockquote>
-<p>记录首尾相连的格式如下图：<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/c7b3fd097f0a78869d8d1224d73a66dc.png" alt="索引头存储结构" width="200" height="280" align="center" /></p>
-<p><strong>索引头存储结构</strong><br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/363220bbe249c69b2e34eb9b2c0a2d3a.png" alt="索引头存储结构" width="300" height="280" align="center" /><br>里面的信息不详细展开了。</p>
-<h4 id="5-行——Row"><a href="#5-行——Row" class="headerlink" title="5. 行——Row"></a>5. 行——Row</h4><p>千呼万唤始出来，绕了半天，终于讲到了行（Row）记录的存储结构；InnoDB支持不同类型的行格式来存储数据，如下图：<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/57733ea2fab9bbf9a5a4f7b782562c4e.png" alt="行格式" width="350" height="280" align="center" /><br>其中Antelope是文件最开始支持的形式，后续增加了Barracuda的格式;其中最常用的是Compact，下面主要介绍Compact格式。<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/a89593ee475d9d420f3243b23f568f60.png" alt="Compact格式" width="350" height="100" align="center" /><br>下面分析下各个字段的含义：</p>
-<ul>
-<li>变长字段长度列表： <code>主要用来存放变长字段的长度，逆序排列。</code><blockquote>
-<p>举例： 字段VARCHAR(16)，存储”abc”，则变长长度为03；把所有变长字段的长度逆序排列；</p>
-</blockquote>
-</li>
-<li>NULL标志位： <code>标志列是否为null；</code></li>
-<li>记录头信息：<img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/f4edd7695bd46820ea6f9757f32894eb.png" alt="记录头信息" width="500" height="120" align="center" />
-> record_type记录类型，3bit，000表示普通页；001表示B+树节点；010表示infimum；011表示supremum；1xx保留。</li>
-<li>列值： <code>真实的数据；</code><blockquote>
-<p>InnoDB会为每行数据添加隐藏的三个列值：</p>
-<ol>
-<li>DB_ROW_ID 行ID,唯一标识一条记录；</li>
-<li>DB_TRX_ID 事务ID；</li>
-<li>DB_ROLL_PTR  回滚指针；</li>
-</ol>
-</blockquote>
-</li>
-</ul>
-<p>由于页有大小限制，当数据库中存储TEXT,BLOB等大型数据时，上述的列值不能完整的存放下所有的数据，这个时候怎么办？？？<br>InnoDB会生成一个BLOB的新页，然后在该列值上存放新页的地址来指向它。Compact格式会存储开头的768bytes。<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/6455789da70241f9696910691bb869fa.png" alt="记录头信息" width="300" height="120" align="center" /></p>
-<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本文主要介绍了InnoDB存储的逻辑结构和物理结构；说白了就是在文件中用链表实现了B+树；为了让计算机识别二进制数据，在记录的头部和尾部包装了各式各样的元信息；为了便于InnoDB各种关键特性的实现，又将头部尾部的元信息分层：segment，extent，page，row。<br>逻辑结构和物理结构的映射如下图：<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/d39240ca64a304dc310b7fef9529f357.png" alt="逻辑物理结构映射" width="400" height="300" align="center" /></p>
-<h2 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h2><p>[1] MySQL技术内幕：InnoDB存储引擎<br>[2] MySQL官方文档<br>[3] 博客</p>
-
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2020/05/25/innodb-storage/#more" rel="contents">
+                Read more &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
       
     </div>
 
@@ -354,7 +338,7 @@
               <span class="post-meta-item-text">Posted on</span>
               
 
-              <time title="Created: 2020-05-25 20:48:31 / Modified: 20:49:14" itemprop="dateCreated datePublished" datetime="2020-05-25T20:48:31+08:00">2020-05-25</time>
+              <time title="Created: 2020-05-25 20:48:31 / Modified: 20:58:17" itemprop="dateCreated datePublished" datetime="2020-05-25T20:48:31+08:00">2020-05-25</time>
             </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -411,116 +395,14 @@
 <p>  存储各式各样的日志文件。</p>
 </li>
 </ul>
-<p>其中MySQL的关键特点就是可插拔的存储引擎；其中InnoDB是MySQL的默认存储引擎，也是应用最为广泛的存储存储引擎，本文主要介绍InnoDB存储引擎的关键特性以及这些特性的一些思考。</p>
-<blockquote>
-<p>数据库和数据实例的区别：</p>
-<ul>
-<li>数据库是文件的集合，是依照某种数据模型组织起来并存放于二级存储器中的数据集合；</li>
-<li>数据库实例是程序，是位于用户与操作系统之间的一层数据管理软件；</li>
-</ul>
-</blockquote>
-<h2 id="InnoDB关键特性"><a href="#InnoDB关键特性" class="headerlink" title="InnoDB关键特性"></a>InnoDB关键特性</h2><p>InnoDB有以下关键特性，其中前三个是数据库最通用的特性：</p>
-<ul>
-<li>Change Buffer（写缓存）</li>
-<li>Double Write（二次写）</li>
-<li>Adaptive Hash Index（自适应哈希索引）</li>
-<li>Async IO（异步IO）</li>
-<li>Flush Neighbor Page（属性邻接页）</li>
-</ul>
-<h3 id="1-Change-Buffer"><a href="#1-Change-Buffer" class="headerlink" title="1. Change Buffer"></a>1. Change Buffer</h3><p>Change Buffer是InnoDB中最特殊的一个特性。Change Buffer是从InnoDB 1.0.x版本之后的引入的概念，在1.0.x版本之前叫Insert Buffer（插入缓存）。Insert Buffer顾名思义是针对Insert的缓存。</p>
-<h4 id="1-1-问题诞生背景"><a href="#1-1-问题诞生背景" class="headerlink" title="1.1 问题诞生背景"></a>1.1 问题诞生背景</h4><blockquote>
-<p>对于InnoDB，所有的数据，索引等都是以文件的形式存储，以B+树的形式存储。<br>InnoDB的索引分为两种：聚簇索引（Primary Index）和非聚簇索引（Secondary Index）；其中聚簇索引的B+树叶子节点存放的是真实的数据；而非聚簇索引的叶子节点存放的是聚簇索引的主键值。</p>
-</blockquote>
-<p>我们先从索引的角度来描述下问题的背景：</p>
-<ul>
-<li>对于聚簇索引，主键是唯一的；当插入新的数据时，需要检查下磁盘是否有主键冲突，这步磁盘访问必不可少；此外，一般对于主键的插入是顺序的（比如id自增列），这样磁盘是顺序读写的，有较好的性能。</li>
-<li>对于非聚簇索引，列值不唯一；当插入新的数据时，插入的数据很难是按递增的顺序插入的，这时候对于插入操作都是随机的；如果有大量的插入操作，则会有大量的随机IO，会严重影响磁盘的性能。</li>
-</ul>
-<p>因此Insert Buffer诞生的问题背景是： <strong>大量的非聚簇索引插入操作？？？</strong></p>
-<blockquote>
-<p>产生的问题背景也反映了Insert Buffer需要满足两点：</p>
-</blockquote>
-<ul>
-<li>必须是非聚簇索引；</li>
-<li>索引的数据不是唯一的；（后面也会有介绍）</li>
-</ul>
-<h4 id="1-2-内部实现"><a href="#1-2-内部实现" class="headerlink" title="1.2 内部实现"></a>1.2 内部实现</h4><blockquote>
-<ol>
-<li>MySQL数据存储包含内存和磁盘两部分；</li>
-<li>内存缓冲池以页（Page）为单位，缓存最热的是：数据页和索引页；</li>
-<li>InnoDB以变种LRU（加了mid位置和时间的概念，非常类似于JVM的内存管理）的算法来管理缓冲池，解决了“预读失效”和“缓冲池污染”的问题；</li>
-</ol>
-</blockquote>
-<p>（1）情况一<br>当要插入的数据已经在缓冲池了，则只需要插入redo日志文件一次磁盘操作；但redo的磁盘是顺序写，效率很高；因此这种情况不需要Insert Buffer。</p>
-<blockquote>
-<p>缓冲池会定期的刷新到磁盘上，而不是每次都刷新，这样会降低磁盘的IO，提升性能，说白了就是批量写（可能会有同一个数据页的合并操作）。</p>
-</blockquote>
-<p>（2）情况二<br>当要插入的数据不再缓冲池中，这时候需要怎么办？<br>为了避免大量的随机IO，提出了Insert Buffer的概念；当插入数据时，先把数据插入到Insert Buffer中；当需要回刷磁盘时，会把Insert Buffer中的数据进行merge后写入磁盘（因为有merge，为了表示现有页的空闲空间，还需要一个特殊的页来保存每个非聚簇索引页的空闲空间），降低了磁盘随机IO。Insert Buffer也是B+树的结构，插入数据时也是按照页来组织聚簇索引和非聚簇索引数据。</p>
-<blockquote>
-<p>举个形象的例子来说明Insert Buffer的具体作用：<br>图书管理员进行书籍整理，有两种做法：</p>
-</blockquote>
-<ul>
-<li>每归还一本书，就去对应的书架上归还这本书；</li>
-<li>先把书放在柜台，等书达到一定量的时候，进行批量的放回对应的书架；</li>
-</ul>
-<blockquote>
-<p>正常人都会选择第二种做法；而柜台就是Insert Buffer，归还的书会先在柜台上进行整理，合并，然后一起放回书架，减少了书架的随机访问。</p>
-</blockquote>
-<blockquote>
-<p>在MySQL5.5之后，不仅针对insert操作，还针对update和delete操作，改名为Change Buffer,原理是一致的。</p>
-</blockquote>
-<p>Change Buffer还有一个细节点，当Change Buffer中的有数据没有写到磁盘前，数据库宕机了，这个时候Change Buffer的数据就恢复不了了，因此鉴于这种情况，InnoDB会把Change Buffer中的数据定期通过merge操作刷回表空间中的索引文件。</p>
-<p>Change Buffer结构图:<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/cdd1b6d676bbc9491896daa94bf1656a.png" alt="Change Buffer"></p>
-<p>从图中可以看出，Change Buffer并不仅仅指的是内存中的一块，还包含了物理磁盘上的共享表空间。</p>
-<h4 id="1-3-缺点"><a href="#1-3-缺点" class="headerlink" title="1.3 缺点"></a>1.3 缺点</h4><ul>
-<li>如果有大量的DML变更操作，数据宕机后，会导致恢复的时间较长；</li>
-<li>有大量插入的时候，会导致占用较多的Buffer Pool内存，会影响其他数据的空间；</li>
-<li>对于不同的硬件配置和负载，Change Buffer无法进行控制，比如磁盘和SSD；</li>
-</ul>
-<h3 id="2-Double-Write"><a href="#2-Double-Write" class="headerlink" title="2. Double Write"></a>2. Double Write</h3><p>从IO的角度来看，InnoDB是以页为维度来读取数据，正常InnoDB的页可以配置为4K，8K，16K;而文件系统的IO读写最小单位是4K，也有些是1K；磁盘的读写最小单位是扇区（512KB）。</p>
-<p>由于各系统以及硬件IO读写的单位不一致，往往底层的单位要小于上层的单位，因此上层就会存在部分写的场景：当写一部分数据的时候，机器宕机了，这样就会导致部分写的场景。（磁盘是由硬件保证，要么512KB全部写成功，要么都失败，不存在部分写的场景）</p>
-<h4 id="2-1-问题诞生背景"><a href="#2-1-问题诞生背景" class="headerlink" title="2.1 问题诞生背景"></a>2.1 问题诞生背景</h4><p>由上述知道，InnoDB的IO最小单位是页,正常大小为16K（可以配置为4K，8K等）；当缓冲池中的脏页回写磁盘时，磁盘的页和缓冲池的页是对等的，也就是要回写16K的数据到磁盘；而文件系统的读写单位可能是4K；这样就需要写入4次，才能完整的把脏页刷回去；如果在写2次的时候，机器断电宕机了，这个时候磁盘的页就被污染了。</p>
-<p>基于这种场景，InnoDB诞生了Double Write的特性，用于解决partial page write（部分写）的问题。</p>
-<h4 id="2-2-内部实现"><a href="#2-2-内部实现" class="headerlink" title="2.2 内部实现"></a>2.2 内部实现</h4><p>参考Change Buffer的设计，Double Write也在Buffer Pool中开辟一块内存，用来存放修改的脏页；并在磁盘的共享表中间中存放脏页，Double Write的逻辑如下图所示：<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/7dd6b4f929b0dfbf9e9d6aa0e551f41d.png" alt="Double Write"></p>
-<p>Double Write的步骤：</p>
-<ol>
-<li>当触发脏页刷新时，先把脏页拷贝到Double Write内存中；</li>
-<li>接着把Double Write中的脏页顺序的写到共享表空间中，这部分是顺序写入磁盘，性能很高；</li>
-<li>异步的将共享表空间的数据离散的写入到各个表空间中；</li>
-</ol>
-<p>Double Write如何宕机恢复的？？？</p>
-<ul>
-<li>如果写入Double Write Buffer时失败，这个时候页还没有刷新回磁盘，也就没有发生部分写的问题，因此直接从磁盘加载原始数据，并通过事务日志重新计算写入Double Write Buffer。</li>
-<li>如果写入磁盘时，宕机，由于共享表空间中副本数据恢复，重新写入磁盘即可。</li>
-</ul>
-<blockquote>
-<p>为啥不用redo log解决部分写的问题？？？<br>这个涉及到redo log的数据设计；如果redo log中保存了所有的数据和操作，那么redo log的size会非常大，不利于日志文件存储；因此InnoDB对于redo log的设计是保存页的指针之类的数据；因此redo log无法恢复物理页，因为redo log中不保存真实的数据。</p>
-</blockquote>
-<h4 id="2-3-缺点"><a href="#2-3-缺点" class="headerlink" title="2.3 缺点"></a>2.3 缺点</h4><p>虽然共享表空间的写入是磁盘顺序写，但依然会影响MySQL的性能；尤其是InnoDB为了保证写入共享表空间数据的完整性，在每次写入后都会调用fsync操作等待磁盘操作结束，硬盘的fsync性能比较慢；</p>
-<h3 id="3-Adaptive-Hash-Index"><a href="#3-Adaptive-Hash-Index" class="headerlink" title="3. Adaptive Hash Index"></a>3. Adaptive Hash Index</h3><p>自适应哈希索引是InnoDB内部的一个优化特性，一般不需要开发人员关注。</p>
-<h4 id="3-1-问题诞生背景"><a href="#3-1-问题诞生背景" class="headerlink" title="3.1 问题诞生背景"></a>3.1 问题诞生背景</h4><p>首先了解下InnoDB的数据存储，InnoDB的数据和主键索引一起存储，主键索引的叶子节点存放的是数据；非主键索引叶子节点存放的是主键的key值。</p>
-<p>当通过非聚簇索引来查询数据时，根据B+索引树查询叶子节点的主键key,然后根据主键key再去主键索引的B+树上找到对应的叶子节点的数据。</p>
-<p>可以看出来通过非聚簇索引来查询数据时，需要访问两个B+树，而自适应哈希索引就是为了解决这个问题，直接构造非聚簇索引key到真实数据的哈希索引，哈希的时间复杂度是O（1）；因此减少了两次B+树的查询操作。</p>
-<p><strong>自适应哈希索引是索引的索引 ！！！</strong></p>
-<h4 id="3-2-内部实现"><a href="#3-2-内部实现" class="headerlink" title="3.2 内部实现"></a>3.2 内部实现</h4><p>自适应哈希索引的难点在于信息统计，要统计出查询的热点数据，为这些热点数据建立哈希索引。比如对于同一条件的频繁访问，可以构造出哈希索引，下次同样的条件可以直接获取结果。</p>
-<p>自适应哈希索引的结构如下图所示：<br><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/2901794483581af0b90be5dc29cbc162.png" alt="自适应哈希索引"></p>
-<p>自适应哈希索引实现的条件：</p>
-<ol>
-<li>精确条件查询，以该条件查询超过100次；</li>
-<li>页访问的次数N=页记录数/16；<br>(内部具体的信息统计涉及很多参数，后续分析)</li>
-</ol>
-<h4 id="3-3-缺点"><a href="#3-3-缺点" class="headerlink" title="3.3 缺点"></a>3.3 缺点</h4><ol>
-<li>自适应哈希索引也是占用Buffer Pool的空间，会影响其他类型数据的空间容量；</li>
-<li>自适应哈希索引只支持精确条件查询，不支持范围查找；</li>
-<li>自适应哈希索引只有在极端的情况下（大量固定条件的查询），才有意义，降低逻辑读时间；</li>
-</ol>
-<h3 id="4-Async-IO"><a href="#4-Async-IO" class="headerlink" title="4. Async IO"></a>4. Async IO</h3><p>为了提供磁盘操作性能，现在的数据库系统都是采用异步IO的方式来处理磁盘操作。异步IO还支持批量操作，把多个页进行整合一起进行IO操作，如果是同一页的数据，或者连续的数据，会提高磁盘的IO性能。</p>
-<h3 id="5-Flush-Neighbor-Page"><a href="#5-Flush-Neighbor-Page" class="headerlink" title="5. Flush Neighbor Page"></a>5. Flush Neighbor Page</h3><p>刷新邻接页是根据“局部性”原理，其工作原理是：<br>当刷新一个脏页时，InnoDB存储引擎会检测该页所在区（extent）的所有页，如果是脏页，那么一起进行刷新。这样做的好处显而易见，通过AIO可以将多个IO写入操作合并为一个IO操作，故该工作机制在传统机械磁盘下有着显著的优势。</p>
-<blockquote>
-<p>InnoDB文件的格式是idb后缀，其中存放了表的数据，又称为表空间Tablespace，表空间又分为多个段Segment；一个Segment又分为多个区Extent；一个区又分为多个页Page；一个页包含了多个行Row。</p>
-</blockquote>
-<h2 id="后记"><a href="#后记" class="headerlink" title="后记"></a>后记</h2><p>InnoDB的关键特性和文件的存储结果密切相关，后面会分析下InnoDB表数据的文件存储结构。</p>
-
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2020/05/25/innodb-features/#more" rel="contents">
+                Read more &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
       
     </div>
 
@@ -564,7 +446,7 @@
               <span class="post-meta-item-text">Posted on</span>
               
 
-              <time title="Created: 2020-05-25 20:46:36 / Modified: 20:47:26" itemprop="dateCreated datePublished" datetime="2020-05-25T20:46:36+08:00">2020-05-25</time>
+              <time title="Created: 2020-05-25 20:46:36 / Modified: 20:58:12" itemprop="dateCreated datePublished" datetime="2020-05-25T20:46:36+08:00">2020-05-25</time>
             </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -590,102 +472,14 @@
           <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>在操作系统出现之前，程序曾经存放在卡片上，计算机每读一张卡片，就运行一条指令，这个时候程序是直接从卡片到执行；但这种从外部存储媒介上直接执行指令的做法效率极低，且灵活性很差，一次只能一个卡片来处理；因此人们发明了内存存储器，来将需要运行的程序先行加载，再自动执行，从而提高效率和灵活性。<br>由于内存的出现，出现了“存储的程序”概念的出现，而存储的程序概念又导致计算机及软件系统的革命性变化，此后人们对内存的要求越来越高。</p>
 <h2 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h2><p>理想的情况下，程序员或用户对内存的要求是：大容量，高速度和持久性。但程序员面临的物理现实却是一个由缓存、主存、硬盘等组成的内存架构。<br>缓存的特点：低容量、高速度、高价格；<br>主存的特点：中容量、中速度、中价格；<br>硬盘的特点：大容量、低速度、低成本；<br>这样的存储架构和程序员、用户的期望相差较大；要以现在的架构为程序员所需的内存抽象，需要一个巧妙有效的内存管理机制。</p>
 <h2 id="内存管理相关"><a href="#内存管理相关" class="headerlink" title="内存管理相关"></a>内存管理相关</h2><p>内存管理把缓存、主存、硬盘都当成一样的内存，因为不管用户的程序是在缓存还是在主存或者硬盘，反正运行计算输出结果都是一样的。<br>内存管理怎么把缓存、主存和硬盘当成是一样的呢？？？这个时候就需要抽象（就像人类喜欢把香蕉和桃子都叫做水果），缓存、主存和硬盘被抽象为“虚拟内存”；通过虚拟内存，程序员和用户不关心底层的实现，只知道程序存在虚拟内存中。<br>虚拟内存本身独立于物理内存，因此概念提出的瞬间，内存管理机制便天然拥有一个目标：地址独立。那内存管理机制还有没有其他目标了？？？<br>在当今的多道程序操作系统中，虚拟内存中会运行着大量的程序，程序与程序之间是要相互独立的，因此内存管理的另一个目标就在于地址保护：一个程序不能去访问另一个程序的内存地址。<br>由于虚拟内存屏蔽了缓存、主存、硬盘的差异性，因此虚拟内存可以看做是操作系统提供的大容量，高速度的内存。<br>本文从种地的角度来解释操作系统内存管理机制的演变以及演变中的哲学原理，知识来源于生活。</p>
-<h2 id="种地（本故事纯属虚构）"><a href="#种地（本故事纯属虚构）" class="headerlink" title="种地（本故事纯属虚构）"></a>种地（本故事纯属虚构）</h2><p>汉朝时期，老王出身贫寒，遂从军，历时十载，军功赫赫，国内一片繁荣；老王怕功高震主，遂请辞回家养老，由于老王的军功，皇帝赐了一块封地给他颐养天年；老王美滋滋的踏上了去封地的旅程~~<br>老王到了封地，果然是一片很大的封地，但是一片荒凉，啥都没有；老王把这块地叫做“物理内存”，给它标记了地址，一开始的地址为0，不停的增长到封地尽头N；</p>
-<h3 id="盖房子（操作系统内存位置）"><a href="#盖房子（操作系统内存位置）" class="headerlink" title="盖房子（操作系统内存位置）"></a>盖房子（操作系统内存位置）</h3><p>老王决定先建一个房子住，不然都没地方住，他把自己的房子命名为“操作系统”；问题产生了：房子建在哪边（操作系统应该放在物理内存哪边）？可以是地址0~N的任何地址位置。<br>计算机中的清零操作很方便，并且开始地址0很容易索引，因此老王决定把操作系统建在地址0处。</p>
-<blockquote>
-<p>老王未雨绸缪，怕将来有仇家寻上门，因此在房子下面建立了地下密室，用于藏身，命名为ROM；<br>计算机体系中分为RAM和ROM，物理内存就是RAM，RAM断电内容消失，因此操作系统一部分是放在ROM上，另一部分加载到RAM中。<br>最后，老王的房子分为了地上的部分和地下密室的部分。</p>
-</blockquote>
-<p><img src="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/bd11ede9b819af06040ab2c207aa3967.png" alt="操作系统内存位置"></p>
-<h3 id="单一作物（单道编程）"><a href="#单一作物（单道编程）" class="headerlink" title="单一作物（单道编程）"></a>单一作物（单道编程）</h3><p>老王很喜欢吃土豆，因此老王决定挑选一块地种土豆；这个时候封地上除了房子只有一个农作物：土豆；相当于计算机中的单道编程，用户程序永远只有一个；这样老王可以随机挑选一个固定的地址T；每次在T地址上种植土豆；这种运行前即将物理地址计算好的方式叫做“静态地址翻译”。这种情况下，虚拟地址永远映射到固定的物理内存地址上；因此单道编程的情况下很容易达到内存管理机制的两个目标。</p>
-<blockquote>
-<p>单道编程的缺点很多，只能运行一个程序，并行度很低；此外加载程序的大小不能超过物理内存空间；而且程序不能移植到不同的操作系统，因为不同操作系统的内存空间大小不一样。</p>
-</blockquote>
-<h3 id="多个作物（多道编程）"><a href="#多个作物（多道编程）" class="headerlink" title="多个作物（多道编程）"></a>多个作物（多道编程）</h3><p>老王吃多了土豆，生病了，大夫让老王吃点其他蔬菜，营养均衡，因此老王想在土豆的基础上种植其他的蔬菜（青菜，番茄等。。。）；老王也不知道要吃多少中蔬菜才能补营养，因此老王不能很好的规划种植的地址；</p>
-<blockquote>
-<p>因为多道编程的情况下，程序无法再加载到固定的内存地址上，这就无法使用静态地址翻译；计算机必须在程序加载完毕后才能计算物理地址，这种就叫做“动态地址翻译”。</p>
-</blockquote>
-<p><img src="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/09fe06f30ca6c87dc1010f70eb1cd2cb.png" alt="动态地址翻译"></p>
-<h4 id="固定分区"><a href="#固定分区" class="headerlink" title="固定分区"></a>固定分区</h4><p>面对如此多的蔬菜作物，老王想了个办法，一批批的补充营养；老王将封地分为大小不同的分区（为啥大小不同，因为有些老王爱吃，多种点），分区数为M；不同的分区种上不同的蔬菜；这样封地有多少分区，老王就可以种多少蔬菜，等其中分区的蔬菜吃完就可以在分区种另一种蔬菜。</p>
-<blockquote>
-<p>计算机系统将内存分为大小不同的多个分区；因为程序的大小不同，不同的程序分配到不同的分区；操作系统用一个队列保存了操作系统的程序，当有空白分区的时候，把程序加入空白分区里；<br>老王知道喜爱的菜多种些，让分区物尽其用；但是计算机如果把小程序分配到大分区里，会造成大量空间的浪费；因此可以每个分区都有自己独立的队列，把适合该分区的程序存放在队列中，当分区空白时，加载相应的程序，这样空间浪费率相对低点。<br>不管是单队列，还是分区多队列，都有很大的问题，但队列的话，会造成大量的空间浪费；多队列会造成有空白分区，但是其他队列的程序再等待，不能运行。</p>
-</blockquote>
-<p>那固定分区的这种情况下，老王怎么统计农作物的地址；老王记录了每个分区在封地的起始地址；然后记录了农作物在分区里的虚拟地址；因此封地的物理地址=虚拟地址+分区的起始地址。</p>
-<blockquote>
-<p>这就是固定分区，计算机的地址翻译；对于内存管理的两个目标，地址保护可以通过地址翻译来判断程序是否超出了分区的地址；因此计算机只需要保存一个基址和一个极限就可以达到地址保护的目的；可以通过基址寄存器和极限寄存器来保存；地址独立是虚拟内存自带的概念；因此固定分区完全符合内存管理的设计。</p>
-</blockquote>
-<p><img src="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/8433f81df942e2c752bf13b7abb0b37a.png" alt="基址+极限"></p>
-<h4 id="非固定分区"><a href="#非固定分区" class="headerlink" title="非固定分区"></a>非固定分区</h4><p>经过了固定分区的规划，老王美滋滋的幻想起了以后美好的生活；但是老王忽略了一点，就是自己的种植能力；大的分区全种植了自己爱吃的番茄，但由于自己种植不当，大部分番茄没长出来，今年造成了大量的土地浪费；老王很心痛，痛则思变；<br>老王想了很久，还是决定灵活处理，不固定分区，而是把封地除了操作系统房子外都当成一个整体；如果要种青菜，则分出一块地中青菜；如果又要种番茄，则在剩下的封地中再分出一块地种番茄；依次类推，当地不足时，就等其中的蔬菜成熟收割后，把地空出来后再种剩下的蔬菜。<br>老王一想，这样就不会有地浪费了，当种不出来的时候，老王就可以种其他蔬菜，充分利用封地；</p>
-<blockquote>
-<p>老王的思想在操作系统中叫做非固定分区内存管理；当程序来的时候，会在空白内存中挑选一块给程序执行。<br>由于固定分区的时候我们知道，用基址和极限两个寄存器就可以表示每个程序的位置；因此在非固定分区下，为每个程序配置基址和极限寄存器就可以识别程序的物理地址。</p>
-</blockquote>
-<p><img src="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/bd99774e8bbd140cd05e68ad266c11b1.png" alt="非固定分区内存管理"></p>
-<p>乍一看，好像问题都解决了，但是老王忽略了一个很严重的问题；有些蔬菜有很强的侵略性，像蒲公英一样，种子会到处传播；导致其他土地上也长满这样的蔬菜，这样就不能很好的隔开种植，规划封地了。</p>
-<blockquote>
-<p>计算机程序在运行过程中，会出现动态增长的情况；程序空间增值的主要来源：数据和栈。那么怎么处理程序的增长呢？？？<br>解决办法就是为增长的程序预留出增长的空间，因此数据和栈的增长就如图所示。<br>数据和栈增长的方向可以是相同，也可以是相反；诞生不同的策略。</p>
-</blockquote>
-<p><img src="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/133a5a2b3fe1a809eb2b1e910fb28a5a.png" alt="分固定分区动态增长"></p>
-<p>预留空间是正常的做法，就像生活中不知道数量的情况下会多留点空间；但是这个有个致命的缺点，就是很难预测究竟需要预留多大的空间，预留多了是种浪费；预留少了没解决根本问题；老王苦思冥想，终于想出了个办法，参考家里的密室，横截面不能扩张，那就往高度上扩张；老王在土地上搭建一层架子，架子上也铺上土，当种菜溢出自己地盘的时候，就把蔬菜移植到架子上面，这样就便于管理了。</p>
-<blockquote>
-<p>那类比到计算机系统中，内存地址不够了怎么办？？？我们不能在上面搭建一层架子；但是我们考虑搭建架子的本质是把蔬菜放到另一片内存中，相当于扩展了内存，因此我们想起来硬盘；我们可以把程序整个加载到硬盘上，当物理内存有足够的空间时，再把程序加载回内存运行，这就是所谓的“交换”。<br>交换的这种方式存在这很大的问题，一个程序被置换出去后，不知道要等多久才能等到足够的空间运行；效率低下；还有个问题，如果超出了整个物理内存，再怎么置换也没用。<br>如果可以把程序变成一个个可执行的单元，执行完一个单元，后面的单元就把前面单元地址覆盖掉；这样就不会出现程序空间不够的情况，这个办法就是所谓的“重叠”；但是程序的切分需要用户管控，相当于把内存管理机制暴露给了用户，这是很危险的，这个办法行不通。</p>
-</blockquote>
-<h3 id="闲置空间管理"><a href="#闲置空间管理" class="headerlink" title="闲置空间管理"></a>闲置空间管理</h3><p>老王是个追求完美的人，他种了很多蔬菜，但是封地依然有很多没有利用的空地，老王需要很好的统计，规划这些空地。老王想了良两种办法：<br>（1）位图法：<br>       老王为每个种植蔬菜的地址单元分配一个字位，用1表示已占用；0表示空闲，这样就形成了一个位图；0表示所有的空闲地址；当空闲地址种植蔬菜时，由0改为1，变成已占用；当蔬菜生熟收割后，地址回收，相应的字位由1变为0，表示空闲。<br>（2）链表法：<br>       老王将分配的地址用链表连接在一起；比如，青菜–&gt;空地–&gt;番茄–&gt;空地；每个节点记录节点的地址；当需要种植蔬菜时，则遍历链表找到空闲的地址种植，链表进行相应的修改。</p>
-<h3 id="问题暴露"><a href="#问题暴露" class="headerlink" title="问题暴露"></a>问题暴露</h3><p>经历了一年的时光，老王也种植了一年蔬菜，老王决定做下总结，把经验分享给后来人；从固定分区到非固定分区到交换内存管理；固定分区用于单道编程，而非固定分区和交换等用于多道编程，实现方式都是基于基址和极限的做法。<br>老王总结了半天，根据统计：不管是固定分区，还是非固定分区；这些策略都存在着重大的问题；其中最重要的就是空间浪费和程序大小受限。随着不停的回收分配，内存中的碎片越来越多；很多小碎片无法满足种植的需求，浪费了；</p>
-<blockquote>
-<p>由于这些碎片处于进程空间的外面，因此这种碎片化过程也叫做“外部碎片化”。随着进程的进进出出，外部碎片将浪费大量的内存空间；当然可以采取一定的策略降低外部碎片，比如每次分配新进程的时候，挑选最合适的空间分配，这可以在一定程度上减轻外部碎片。<br>还有种办法是可以进行碎片整理，通过交换，把碎片合并在一起；但交换效率非常低。</p>
-</blockquote>
-<h3 id="分页管理"><a href="#分页管理" class="headerlink" title="分页管理"></a>分页管理</h3><p>上述整个的做法，都是把程序整个加载到内存里。老王把整个区域都种植一种蔬菜，但是每种蔬菜的种子数量不相同，这就会导致外部碎片的存在；老王想到了一种办法，为啥每次都要以蔬菜种子的数量来要求土地，而不是用土地来要求蔬菜种子的数量。</p>
-<blockquote>
-<p>此外，上述程序增长的极限在于物理内存的大小；如果一部分一部分的加载程序，程序的增长极限就被扩大了。</p>
-</blockquote>
-<p>想到这里，老王开始实施自己的想法，他把整个封地按照一定的大小，划分成很多块，每一小块叫做一个分页。<br><img src="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/5f02ccf8b8cdaee0e93b955b3283ea91.png" alt="分页管理"></p>
-<p>有了分页之后，老王的种植变的更加容易管理；他可以在每一页上种植任何自己想吃的蔬菜；比如在第1号页上种植土豆，在第2号页上种植番茄，如果老王需要土豆种植量增大，但又没有额外空间了，那么可以把2号页上的番茄移植成土豆。</p>
-<blockquote>
-<p>在计算机操作系统中；程序被分成一页页的，每个程序都可以运行一部分页在内存中，当需要运行程序其他部分时，会把其他也加载到内存；如果没有额外的内存空间，则会把当前一些页置换到硬盘中，空出内存给运行的程序使用；这种方法下，程序可以超出物理内存实际的限制大小。</p>
-</blockquote>
-<h4 id="分页地址翻译"><a href="#分页地址翻译" class="headerlink" title="分页地址翻译"></a>分页地址翻译</h4><p>有了分页后，老王如果管理这些分页，并且知道每个分页上种植的蔬菜，而不是每天都要走一遍整个封地。老王对页面进行编号，从0开始；从上述的基址和极限，我们知道，分页的地址主要分为两块：页面号和页内偏移地址。</p>
-<blockquote>
-<p>分页系统首先要知道的是该页面是否存在物理内存中，如果存在，对应的物理页面号是哪个？如果不存在，则产生缺页中断，并将虚页从磁盘加载到内存，然后将分配的物理页面号返回。<br>由于虚页和物理内存真实的页面是同样大小，因此地址翻译只需要把虚页转换到物理页，页内偏移地址无需改变。<br>分页内存管理中，不光需要知道页号，还需要知道该页面是否在物理内存中；此外页面有没有修改过，有没有被访问过，都需要保存这些信息；因此诞生了页表的概念；<br>页表在内存管理的地位十分重要，根本功能是提供从虚拟页面到物理页面的映射。比如32位寻址的虚拟地址，如果页面大小为4KB，则虚拟页面最多可以达到$ 2^{20} $，也就是页表记录条数最大为：$ 2^{20} $。</p>
-</blockquote>
-<p>现在老王有了自己的页表，页表里记录了虚拟页面号到物理页面号的映射，并且记录了页面的偏移地址；比如老王的页面上记载了虚拟页面0种植了土豆，并且土豆的偏移地址为页面的一半；这条记录就代表了物理页面a上面种植了土豆，并且整个页面从起始地址到页面一半处种植了土豆，剩余的一半页面空闲着；</p>
-<p>通过这个案例，可以看出，分页管理把外部的碎片转移到了页内，由于分页的粒度比分区的更细，从数学上看，平均浪费空间为半个分页，因此浪费的空间比分区要好很多。</p>
-<p>那分页系统还有其他缺点吗？？？<br>有，缺点就是页表很大，占用了大量的内存空间。汉朝没有纸张，都是通过竹简和绵帛来记录的，老王一穷二白，只有封地，因此只能把页表记录在土地上；因此页表太大也会占用大量的内存空间。</p>
-<h4 id="页表"><a href="#页表" class="headerlink" title="页表"></a>页表</h4><p>老王参考分页的做法，把页表也进行了分页；就是“多级页表”的概念。</p>
-<blockquote>
-<p>操作系统中，顶级页表映射到一级页表，然后一级页表映射到二级页表，依次映射；这样当加载页表时，可以先加载顶级页表，根据一层层映射把需要的页表加载到内存，不用的页表放在硬盘上，这样就可以支持多级页表；<br>但是多级页表增加了地址翻译的次数，每次操作数据，都需要进行多级的地址翻译；内存访问的速度明显下降。<br>多级页表通过增加级数来降低页表的内存空间；有办法不增加级数来降低页表的内存空间吗？？？使用反转页表，正常页表存储的是虚拟内存到物理内存的映射，但是虚拟内存空间要远远大于物理内存；这个时候反转页表，保存物理内存到虚拟内存的映射，由于物理内存较小，这样空间大大减少；但是CPU发出的地址是虚拟地址，反转列表造成了查询的困难；这时候可以通过虚拟页面到物理页面的散列来提升查询效率。<br>页表的形式也是不断的演变，针对不同的系统需求页表会有不同的演变需求。</p>
-</blockquote>
-<h4 id="翻译快表"><a href="#翻译快表" class="headerlink" title="翻译快表"></a>翻译快表</h4><p>在多级页表的情况下，地址翻译的速度大大降低，影响了内存的访问速度；由于程序的时空局限性，我们可以将页表的翻译结果存在缓存中，缓存的速度要高于内存的速度，在缓存命中的情况下，内存的读写速度将会提高；这种将翻译结果放在缓存的结果，就叫“翻译快表”。在翻译快表的情况下，如果快速的查找到虚拟页面是否存在翻译快表中；这个时候只能一个记录一个记录的按顺序查询，如果翻译快表中不存在页面，则每次都需要按顺序查询；时间消耗巨大。<br>基于这种情况，软件已经无法解决根本问题，只能把问题交给硬件；硬件为每条记录配备一套电路，当翻译快表比对时，是同一时间比对所有记录；这样会在第一时间获得比对结果。</p>
-<h4 id="页面更换算法"><a href="#页面更换算法" class="headerlink" title="页面更换算法"></a>页面更换算法</h4><p>老王现在已经有了页表，有了页面内存管理；老王又出现了一个问题：土地有了，房子有了，蔬菜也有了，但是没有钱，买不了衣服等生活用品；为了赚更多的钱满足生活需要，老王决定把种的蔬菜卖掉；为了利益最大化，老王需要卖掉当季流行的蔬菜，但当季流行的蔬菜变化很快；老王需要一种策略可以很快的替换页面，种植流行的蔬菜。</p>
-<blockquote>
-<p>老王的问题就涉及到了页面置换算法，页面置换算法的根本目的，是要增加页面的命中率；从人类哲学的层次来看，页面置换算法主要分为两类：公平算法和非公平算法。<br>公平算法：</p>
-</blockquote>
-<ul>
-<li>随机算法</li>
-<li>先来先出算法</li>
-<li>第二次机会算法</li>
-<li>时钟算法<blockquote>
-<p>非公平算法：</p>
-</blockquote>
-</li>
-<li>最有算法</li>
-<li>NRU算法</li>
-<li>LRU算法</li>
-<li>工作集算法<blockquote>
-<p>这些算法就不一一解释了。</p>
-</blockquote>
-</li>
-</ul>
-<h3 id="段式内存管理"><a href="#段式内存管理" class="headerlink" title="段式内存管理"></a>段式内存管理</h3><p>老王把封地管理的有条不紊；分页内存管理被老王用的炉火纯青；一切都很顺利，但是这个时候问题又来了；老王又病了，大夫说长期不吃肉，抵抗力下降。老王寻思着大夫的话，决定在封地上养写鸡鸭。<br>于是，老王划了两块连在一起的地来养鸡鸭；鸡鸭各占一块；由于缺少养家禽的经验，鸡鸭繁殖的速度很快，导致划分的土地不够鸡鸭生存，鸡鸭把周围的蔬菜都糟蹋了。</p>
-<blockquote>
-<p>在操作系统中，编译器的工作过程经常需要保持多个数据结构：常数表，语法分析树，代码段，调用栈等；每个数据结构都是独立的增长，从而造成了内存空间的变化。如果编译器只在一个虚拟空间中活动，那么所有数据结构的增长可能会相互碰撞，导致无法增长，编译失败。<br>这就是分页系统的缺点；虚拟空间的大小受寻址宽度的限制而无法增长；那剩下的办法就是让一个程序使用多个虚拟空间。</p>
-</blockquote>
-<p>老王把封地参考分区的做法，分为多个段；一个段占用一个虚拟地址空间；把一个程序分为多个段，不同的段运行在不同的虚拟内存中；为了区分不同的段，我们有了段号和段内偏移地址。段的个数非常少，因此段表的尺寸非常小。</p>
-<p><img src="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/ff165180a8891e8081ffc58f88bfa754.png" alt="段式内存管理"></p>
-<blockquote>
-<p>分段的优点十分明显，程序每个逻辑单元可单独占一个虚拟地址空间，这样可使编写的程序的空间大为增长；不会出现分页系统一个页面里可能同时包含数据和代码而造成增长极限和共享的问题；<br>分段的感觉像是又回到了分区时代；缺点十分明显；外部碎片以及一个段必须全部加载到内存。</p>
-</blockquote>
-<h3 id="段页式内存管理"><a href="#段页式内存管理" class="headerlink" title="段页式内存管理"></a>段页式内存管理</h3><p>老王既琢磨出来分页管理，又琢磨出了分段管理；到底用哪个，老王一拍脑袋，为啥不组合下，把优点结合下，这就出来了段页式存储。<br>把一个段内存按页来分，就是段表映射到页表；这种段页式结合了段式和页式的优点，现在大部分商业系统都使用段页式内存管理方式。</p>
-<h2 id="后记"><a href="#后记" class="headerlink" title="后记"></a>后记</h2><p>由于老王在管理上的卓越贡献，皇帝特封其为农国公。知识源于生活，老王用生活的经验沉淀出了一套操作系统内存管理的机制。</p>
-
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2020/05/25/memory-manager/#more" rel="contents">
+                Read more &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
       
     </div>
 
@@ -729,7 +523,7 @@
               <span class="post-meta-item-text">Posted on</span>
               
 
-              <time title="Created: 2020-05-25 20:44:16 / Modified: 20:45:34" itemprop="dateCreated datePublished" datetime="2020-05-25T20:44:16+08:00">2020-05-25</time>
+              <time title="Created: 2020-05-25 20:44:16 / Modified: 20:58:08" itemprop="dateCreated datePublished" datetime="2020-05-25T20:44:16+08:00">2020-05-25</time>
             </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -755,121 +549,14 @@
           <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>计算机操作系统是一门“人造的”系统；处处都透露这人类的思考惯性，人性的哲学原理。从人类本身的处理角度去理解操作系统中线程的各种原理是很有必要的，会让你对线程的理解更加深刻。</p>
 <h2 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h2><p>如我们所知，进程是一段运转的程序，是为了CPU上实现多道编程而发明的一个概念。在操作系统层面，进程是一系列计算机指令的聚合。当进程遇到阻碍时，比如用户输入等，会阻塞整个进程；后续跟输入无关的指令也得不到执行；因此，把进程中的指令分为几份不同的功能；每一份就是所谓的“线程”。<br><img src="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/9316a383c4ddfedc165ce8121da086f1.png" alt="线程模型"></p>
 <p>基于上述的描述，我们对线程进行定义：线程就是在进程里一个单独的顺序控制流。至于进程把哪些指令切分成进程，后面文章再进行分析。下面我们开始养金鱼。</p>
-<h2 id="养金鱼"><a href="#养金鱼" class="headerlink" title="养金鱼"></a>养金鱼</h2><p>有一间屋里有三个房间；其中两个房间住着人（Tom和Jerry），另一个房间养了条金鱼；金鱼需要两个人进行喂养，金鱼有个很大的特点，就是没有饱的感觉，会不停的吃直到撑死自己；如果两个人先后都喂养了金鱼，金鱼就会撑死；如果两个人先后都没有喂养金鱼，金鱼会饿死；（假设不考虑给两个人排班的情况，两个人的行为不受约束）。</p>
-<p>上述的两个人就相当于两个线程，而金鱼则是临界资源；这就是一个线程同步的问题？线程同步的目的就是为了让多个线程不管执行的时候如何穿插，其运行结果都是正确的。</p>
-<p>为了养好金鱼，Tom和Jerry只能做如下约定：<br>（1）每天喂鱼一次，且仅一次；<br>（2）如果今天Tom喂了鱼，Jerry今天就不能喂鱼了；反之亦然；<br>（3）如果今天有一人没有喂鱼；另一个必须喂鱼；不然鱼会饿死；</p>
-<h3 id="原始阶段"><a href="#原始阶段" class="headerlink" title="原始阶段"></a>原始阶段</h3><p>在非同步的情况下，Tom和Jerry只能靠经验来判断鱼是否已经被喂过；比如两个线程，Tom线程来查看鱼是否已喂的时候，发现鱼并没有喂，准备进行喂食；这个时候线程切换到Jerry，Jerry同样检查鱼的状态，发现鱼还没有喂，进行喂食；然后线程又切回Tom，Tom进行喂食；这样鱼撑死了。</p>
-<table>
-<thead>
-<tr>
-<th>时间</th>
-<th>Tom</th>
-<th>Jerry</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>10:00</td>
-<td>check feed status</td>
-<td></td>
-</tr>
-<tr>
-<td>10:05</td>
-<td></td>
-<td>check feed status</td>
-</tr>
-<tr>
-<td>10:10</td>
-<td></td>
-<td>feed fish</td>
-</tr>
-<tr>
-<td>10:15</td>
-<td>feed fish</td>
-<td></td>
-</tr>
-</tbody></table>
-<h3 id="留字条阶段"><a href="#留字条阶段" class="headerlink" title="留字条阶段"></a>留字条阶段</h3><p>由于上述两个线程都对鱼状态进行了数据竞争，同一时刻访问了同一个数据（鱼的状态）。要防止鱼撑死，Tom和Jerry开始商量如何防止数据竞争；最简单的方法就是同一时刻不让两个人查看鱼的状态，这就需要协调两个线程；只有一个线程可以进入临界区，这称为互斥。<br>那怎么确保一次只有一个人在临界区呢？<br>显而易见，自然是让两个人进行交谈；如果Tom和Jerry一个早班一个晚班，正常碰不到面，那最简单的办法就是留字条；</p>
-<blockquote>
-<p>留字条的做法就相当于两个线程之间的共享内存，一个线程对内存的修改对另一个线程可见；</p>
-</blockquote>
-<p>于是Tom和Jerry的流程就变成了先去检查字条；</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">## Tom, Jerry</span><br><span class="line"><span class="keyword">if</span> (noNote)&#123;</span><br><span class="line">  leave note;</span><br><span class="line">  <span class="keyword">if</span> (noFeed)&#123;</span><br><span class="line">    feed fish;</span><br><span class="line">  &#125;</span><br><span class="line">  remove note;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>上面的程序看似用了字条这样的互斥手段，实际并没有达到互斥的目的；金鱼依然有撑死的风险（当两个程序都进入了检查字条的条件中）；本方案并没有解决鱼撑死的问题，但有所改进，降低了鱼撑死的概率。</p>
-<h3 id="互斥留字条阶段"><a href="#互斥留字条阶段" class="headerlink" title="互斥留字条阶段"></a>互斥留字条阶段</h3><p>仔细分析上面留字条的程序，会发现程序没有解决的根本原因在于先检查字条，然后再留字条，这造成了一个空档，当第二个线程在空档时切换过去，就造成了鱼撑死。</p>
-<p>如果修改下顺序，先留字条，然后再检查字条状态是否会有用？需要区分下是谁留的字条。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">## Tom</span><br><span class="line">leave noteTom;</span><br><span class="line"><span class="keyword">if</span> (no noteJerry)&#123;</span><br><span class="line">  <span class="keyword">if</span> (no feed)&#123;</span><br><span class="line">    feed fish;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br><span class="line">remove noteTom;</span><br><span class="line"></span><br><span class="line">## Jerry</span><br><span class="line">leave noteJerry;</span><br><span class="line"><span class="keyword">if</span> (no noteTom)&#123;</span><br><span class="line">  <span class="keyword">if</span> (no feed)&#123;</span><br><span class="line">    feed fish;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br><span class="line">remove noteJerry;</span><br></pre></td></tr></table></figure>
-
-<p>这样不管线程怎么穿插，总有一个留字条的动作在检查这个字条之前，这样就避免了鱼撑死的可能。<br>那这个程序成功了？NO。<br>如果上述程序两个穿插执行，那么将没有一个人去喂鱼，鱼会饿死。因此程序还是不对的，没有达到最终的效果。但是对于计算机而言，饿死对于撑死是一种改善：如果撑死，程序运行可能出错；而饿死，大家都拿不到资源，线程处于阻塞状态，停止推进，不一定会产生错误。</p>
-<h3 id="循环等待阶段"><a href="#循环等待阶段" class="headerlink" title="循环等待阶段"></a>循环等待阶段</h3><p>分析上面的饿死原因，因为没有人进入临界区；互斥是保证同一时间只有一个线程进入临界区；现在是互斥过头了，两个线程没有一个进入临界区，导致没有人喂食，鱼饿死了。<br>这个时候就必须保证有一个人一定进入临界区，怎么办？<br>当你去买喜茶时，一直买不到，能怎么办，一直等呗。最粗暴最简单的方法。<br>在这边也是，为了能有一个人进入临界区，保证鱼一定有人喂；因此需要有一个人一直等待，我们暂定Tom。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">## Tom</span><br><span class="line">leave noteTom;</span><br><span class="line"><span class="keyword">while</span>(noteJerry)&#123;</span><br><span class="line">  <span class="keyword">do</span> nothing;</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">if</span> (no feed)&#123;</span><br><span class="line">  feed fish;</span><br><span class="line">&#125;</span><br><span class="line">remove noteTom;</span><br></pre></td></tr></table></figure>
-
-<p>检查下发现，现在鱼不会出现饿死和撑死的情况了，是否大功告成了?</p>
-<h3 id="对称之美"><a href="#对称之美" class="headerlink" title="对称之美"></a>对称之美</h3><p>上面的程序解决了金鱼的生计问题；但是会带来两个问题：<br>（1）Tom一直在空等待，浪费资源；</p>
-<blockquote>
-<p>空等待还可以造成线程优先级倒挂的问题；高优先级的空等待等待低优先级的资源；就像总统要听平民的话一样；</p>
-</blockquote>
-<p>（2）Tom和Jerry都是喂金鱼的，但是程序不一样，不是对称的；Tom要多做事；不美观，两套维护逻辑；<br>此外，不对称的程序会增加理论证明的困难，这边不详细展开。</p>
-<p>那怎么解决这两个问题呢？<br>不好解决。如果去除了空等待，则会出现饿死的情况；如果要对称，两边都是空等待，一样会造成饿死情况。推进似乎走到了尽头。</p>
-<h3 id="锁阶段"><a href="#锁阶段" class="headerlink" title="锁阶段"></a>锁阶段</h3><p>我们再看看留字条阶段，之所以出现撑死的原因在于：检查字条和留字条之间出现了空档，正是这个空档的存在，导致鱼可能会撑死。<br>从人的角度出发思考，显而易见的会想如果这个空档不出现，是否就不会撑死了???</p>
-<blockquote>
-<p>之前我们的思考都是基于指令级的，在一个非常低的层次上打转；因为是指令层的，所以就没办法消除指令之间的空档；现在指令层次已经无能为力了，应该提高抽象层次，将思路上升到一组指令的控制。<br>在金鱼问题中，我们陷入了金鱼和字条贴鱼缸的层次来思考怎么同步养金鱼；那是否可以上升一个层次从放置鱼缸的房间的层次来考虑养金鱼的问题。</p>
-</blockquote>
-<p>基于上面的分析，检查字条和留字条我们当成一个操作，变相的就是房间上锁的操作，只能保证一个人进入房间（进入房间唯一做的事就是喂金鱼）；这样问题就转换为：<br>（1）如果保证同时只有一个人进房间；（防止撑死）<br>（2）每天必须有一个人进房间；（防止饿死）</p>
-<p>这在生活中最常见的做法就是：一个人进去后锁门，那么另一个人一定进不去该房间。这就是锁的概念。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">##Tom</span><br><span class="line">lock();</span><br><span class="line"><span class="keyword">if</span> (no feed)&#123;</span><br><span class="line">  feed fish;</span><br><span class="line">&#125;</span><br><span class="line">unlock();</span><br><span class="line"></span><br><span class="line">##Jerry</span><br><span class="line">lock();</span><br><span class="line"><span class="keyword">if</span> (no feed)&#123;</span><br><span class="line">  <span class="function">feed <span class="title">fish</span><span class="params">()</span></span>;</span><br><span class="line">&#125;</span><br><span class="line">unlock();</span><br></pre></td></tr></table></figure>
-<p>由上述程序可以看出，同一时间只会有一个人进入房间进行喂食，鱼不会撑死；当程序执行时，总有一个人会进入房间进行喂食，鱼不会饿死；并且程序还是对称的；完美~~</p>
-<blockquote>
-<p>锁应该具备的特性：</p>
-</blockquote>
-<ul>
-<li>锁的初始状态是打开状态；</li>
-<li>进入临界区前必须获得锁；</li>
-<li>出临界区时必须打开锁；</li>
-<li>如果别人持有锁，则必须等待；<br>留字条就相当于锁，但是它不满足于第四个条件，别人持有锁时，没有等待，所以不能互斥；</li>
-</ul>
-<h3 id="锁优化阶段"><a href="#锁优化阶段" class="headerlink" title="锁优化阶段"></a>锁优化阶段</h3><p>上述程序完美的实现了Tom和Jerry的需求，金鱼可以很好的生活了；但是运行了一段时间后，Tom发现一个问题；当Jerry进入房间喂鱼时，Tom需要一直等待在外面，而Jerry喂鱼比较慢，Tom觉得很浪费时间，怎么办？？？<br>去除锁是很不现实的，因为就是靠锁来保证互斥；但是我们可以减少锁的时间；喂鱼这个耗时动作没必要放在锁里；</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line">## Tom</span><br><span class="line">lock();</span><br><span class="line"><span class="keyword">if</span> (no noteJerry)&#123;</span><br><span class="line">  leave noteTom;</span><br><span class="line">&#125;</span><br><span class="line">unlock();</span><br><span class="line"><span class="keyword">if</span> (no noteJerry)&#123;</span><br><span class="line">  <span class="keyword">if</span> (no feed)&#123;</span><br><span class="line">     feed fish;</span><br><span class="line">  &#125;</span><br><span class="line">  remove note;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">## Jerry</span><br><span class="line">lock();</span><br><span class="line"><span class="keyword">if</span> (no noteTom)&#123;</span><br><span class="line">  leave noteJerry;</span><br><span class="line">&#125;</span><br><span class="line">unlock();</span><br><span class="line"><span class="keyword">if</span> (no noteTom)&#123;</span><br><span class="line">  <span class="keyword">if</span> (no feed)&#123;</span><br><span class="line">    <span class="function">feed <span class="title">fish</span><span class="params">()</span></span>;</span><br><span class="line">  &#125;</span><br><span class="line">  remove note;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>这个程序把喂食独立出了锁，相当于锁门只是为了再鱼缸上贴个字条，然后在后续的任意时间段根据字条来喂食；现在加锁的步骤只有贴字条，这个动作很快。</p>
-<h3 id="睡觉和叫醒阶段"><a href="#睡觉和叫醒阶段" class="headerlink" title="睡觉和叫醒阶段"></a>睡觉和叫醒阶段</h3><p>不管上述程序锁的内容多么精简，依然存在这锁等待的情况；占用CPU资源在空跑，那么怎么解决这种现象？？？<br>在日常人类生活中，如果需要长时间等待，则最常见的做法是先去做其他事，等过段时间再来看看等待的事有没有好；或者让等待完成的事通知你。<br>计算机的思想也是一样的，如果出现等待，那么这个等待的线程需要让出CPU给其他线程执行，这样才能保证CPU资源利用率最大化。如果对方持有锁，则不需要等待，而是直接去睡觉；等对方释放锁的时候再唤醒你。这就是最典型的生产者和消费者的场景。</p>
-<p>现在问题升级了！！！<br>Tom和Jerry为了保持鱼的活性，在房间里装了很多通水的管子，鱼可以在房间里任意游动；那么生产者和消费者在这边是什么场景？<br>鱼缸是一个固定的投食点，Tom和Jerry是生产者，鱼是消费者，Tom和Jerry每天定时生产饲料；鱼则每天消费饲料。<br>当投食点里没有食物时，鱼就去游动或者睡觉；然后每天会自动通知Tom和Jerry进行生产饲料；当饲料生产出来后，Tom和Jerry会通过超声波通知鱼来吃饭。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">int</span>  count=<span class="number">0</span>;</span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">producer</span><span class="params">()</span></span>&#123;</span><br><span class="line">  <span class="keyword">while</span>(<span class="keyword">true</span>)&#123;</span><br><span class="line">    produce item;</span><br><span class="line">    <span class="keyword">if</span> (count == <span class="number">1</span>)&#123;</span><br><span class="line">       sleep();</span><br><span class="line">    &#125;</span><br><span class="line">    insert item;</span><br><span class="line">    count = count+<span class="number">1</span>;</span><br><span class="line">    <span class="keyword">if</span> (count == <span class="number">1</span>)&#123;</span><br><span class="line">       wakeup(consumer);</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">consumer</span><span class="params">()</span></span>&#123;</span><br><span class="line">  <span class="keyword">while</span>(<span class="keyword">true</span>)&#123;</span><br><span class="line">    <span class="keyword">if</span> (count==<span class="number">0</span>) sleep();</span><br><span class="line">    remove item;</span><br><span class="line">    count = count - <span class="number">1</span>;</span><br><span class="line">    <span class="keyword">if</span> (count == <span class="number">0</span>) wakeup(producer);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>上述程序是一个典型的生产者和消费者的简易代码；会有什么问题吗？（count共享变量应该要加锁控制，这边不展示）<br>比如，消费者先执行，当它判断现在count==0时，也就是现在还没有生产任何物品，这个时候CPU切换到了producer；producer生产物品，并一直执行到最后的wakeup，由于现在消费者还没有执行sleep操作，wakeup相当于做了个无用功；之后CPU又切换到了consumer，然后执行sleep操作；这样再执行producer时，也会因为物品已满而sleep；问题就来了，producer和consumer都sleep了；整个流程阻塞了，死锁了。</p>
-<blockquote>
-<p>这个问题的根源在哪？？？<br>因为之前的wakeup操作丢失了，如果这个wakeup操作没有丢失，而是保存着，当consumer sleep后操作又被执行，问题就不存在了。</p>
-</blockquote>
-<h3 id="信号量"><a href="#信号量" class="headerlink" title="信号量"></a>信号量</h3><p>信号量：能够将系统发送的信号累积起来的操作系统原语。<br>简单的来说，信号量就是一个计数器，其值就是信号累积的数量。如果将信号量的值限制为0和1，则该信号量就是一把锁。<br>上述生产者和消费者的问题就可以通过三个信号量来解决。</p>
-<ul>
-<li>mutex：互斥信号量，保证只有一个线程操作缓冲区；</li>
-<li>full：缓冲区计数信号量，商品数量；</li>
-<li>empty：缓冲区计数信号量，缓冲区空位数量；</li>
-</ul>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">int</span> mutex = <span class="number">1</span>;</span><br><span class="line"><span class="keyword">int</span> empty = <span class="number">1</span>;</span><br><span class="line"><span class="keyword">int</span> full = <span class="number">0</span>;</span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">producer</span><span class="params">()</span></span>&#123;</span><br><span class="line">  <span class="keyword">while</span>(<span class="keyword">true</span>)&#123;</span><br><span class="line">    produce item;</span><br><span class="line">    empty--;</span><br><span class="line">    mutex--;</span><br><span class="line">    insert item;</span><br><span class="line">    mutex++;</span><br><span class="line">    full++;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">consumer</span><span class="params">()</span></span>&#123;</span><br><span class="line">  <span class="keyword">while</span>(<span class="keyword">true</span>)&#123;</span><br><span class="line">    full--;</span><br><span class="line">    mutex--;</span><br><span class="line">    remove item;</span><br><span class="line">    mutex++;</span><br><span class="line">    empty++;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>只有full==0和empty==0同时成立，才会出现生产者和消费者同时睡眠的情况，显然是不成立的。</p>
-<blockquote>
-<p>为啥需要full和empty两个信号量，因为生产者和消费者等待的信号不同，需要在不同的信号量上睡眠。</p>
-</blockquote>
-<blockquote>
-<p>为了实现线程同步，我们引入了锁；但是锁又带来循环等待的问题，为此我们又引入了睡觉与叫醒；但又带来了死锁的问题，又引入了信号量；操作系统的演化深深的反映着“人造”这两个字。<br>那么信号量是不是就是操作系统终极原语了？？？</p>
-</blockquote>
-<p>我们先来看下信号量对于生产者和消费者的代码：<br>如果将消费者的full–和mutex–顺序交换下，会出现啥问题；消费者先互斥进入缓冲区，然后full–，发现没有物品，则等待；这个时候生产者开始执行，先empty–，然后mutex–；由于这个时候消费者已经在缓存区了，生产者将不能进入缓存区；死锁；<br>由此可见信号量的操作顺序非常重要，稍有不慎，就容易死锁；如果一个程序中有几十个信号量，那么他们之间的顺序将非常复杂，编写这样的信号量代码将是非常反人类的，那有什么办法解决？？？</p>
-<h3 id="管程"><a href="#管程" class="headerlink" title="管程"></a>管程</h3><p>由于信号量编写和维护的复杂性，很难真正的被应用。在人类的哲学中，每个人擅长的东西不一样，比如家里的洗衣机坏了，你不会自己去修，而是找专门的人来修，这就是术业有专攻（你不行的时候，把困难交给别人）。因此在操作系统中，信号量的组织工作自己做不了，就交给一个专门的构造来负责，程序员就解脱了。这个构造就是管程。</p>
-<p>管程是一个程序语言级别的构造，它的正确运行是通过编译器保障的。管程的英文是monitor；是一组子程序、变量和数据结构组成，把需要同步的代码至于管程中，由编译器保证任何时候只有一个线程在管程中运行。</p>
-<p>管程有两种同步机制：锁和条件变量。锁用来控制互斥；条件变量就是线程等待的东西，用来控制执行的顺序。</p>
-<blockquote>
-<p>一个管程包含了：</p>
-</blockquote>
-<ul>
-<li>多个彼此可以交互并且共享资源的线程；</li>
-<li>多个与资源使用相关的变量；</li>
-<li>一个互斥锁；</li>
-<li>条件变量；<br>管程其实就是对信号量的面向对象的封装。东尼·霍尔证明了管程与信号量是等价的。管程比信号量更加安全可控，容易差错。</li>
-</ul>
-<h3 id="消息传递"><a href="#消息传递" class="headerlink" title="消息传递"></a>消息传递</h3><p>那么管程有没有什么问题呢？<br>管程最大的问题就是对编译器的依赖。编译器在编译管程时，需要在其前后加上同步原语。<br>另一个问题是：管程只适用于单机系统；现在的分布式系统完全不适用。</p>
-<p>如果需要在网络环境下进行同步，靠的是消息传递。消息传递分为send和receive两个操作系统的系统调用。<br>以生产者消费者为例，生产者先等待空盒消息，如果有空盒，则生成物品，放入盒子，并发送给消费者；消费者先发送空盒消息，然后等待生产者发送的物品消息，最后再发送空盒消息，消费物品。</p>
-<p>消息传递的优点有很多，是当前使用非常普遍的线程同步机制。同事消息传递也有很大的缺点：最大的问题就是消息的丢失和身份识别。<br>消息在网络环境丢失的概率还是很大的；而且也需要确定你收到的消息确实是你想要的人发送的。于是就诞生了很多可靠的协议，比如TCP；以及用于身份识别的数字签名和对称加密技术。</p>
-<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p>计算机操作系统演进的过程中处处透露出人类的哲学；从问题分析到解决问题，然后引入问题，再转移问题，解决问题，呈现一个螺旋式上升的过程；明白了这些技术演进的过程，有助于了解技术适用的基本场景，也有助于更深刻的理解一门技术。</p>
-
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2020/05/25/threads-sync/#more" rel="contents">
+                Read more &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
       
     </div>
 
@@ -913,7 +600,7 @@
               <span class="post-meta-item-text">Posted on</span>
               
 
-              <time title="Created: 2020-05-25 20:11:33 / Modified: 20:36:47" itemprop="dateCreated datePublished" datetime="2020-05-25T20:11:33+08:00">2020-05-25</time>
+              <time title="Created: 2020-05-25 20:11:33 / Modified: 20:58:11" itemprop="dateCreated datePublished" datetime="2020-05-25T20:11:33+08:00">2020-05-25</time>
             </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -950,61 +637,14 @@
 </ul>
 </li>
 </ul>
-<h3 id="三阶段提交（3PC）"><a href="#三阶段提交（3PC）" class="headerlink" title="三阶段提交（3PC）"></a>三阶段提交（3PC）</h3><p>3PC解决了上述2PC的问题，把Commit阶段分成了PreCommit和Commit结算，相当于在Commit操作之前加了个屏障，这个屏障相当于告诉所有投票者，所有投票者都收到了propose的结果；当协调者在PreCommit之前crash，则voters可以认为不是所有voters收到propose结果，从而放弃commit或者选择新的协调者；如果协调者在PreCommit之后crash，则每个voter可以放心的Commit，因为已经默认所有voters都收到propose结果了。<br>缺点：3PC可以处理fail-stop的问题，但是不能处理网络划分和fail-recover问题。<br>网络划分：当有多个机器处于不同的网络中，并且网络之间不能通信，那协调者crash之后，两个网络会选出不同的新的协调者。<br>fail-recover：当协调者crash之后，选出新的协调者；当老的协调者重启后，新老协调者对同一个投票者可能发送不同的指令，投票者的状态出现分歧。</p>
-<h2 id="Paxos"><a href="#Paxos" class="headerlink" title="Paxos"></a>Paxos</h2><h3 id="概念"><a href="#概念" class="headerlink" title="概念"></a>概念</h3><blockquote>
-<p>Paxos is a mechanism for achieving consensus on a single value over unreliable communication channels.</p>
-</blockquote>
-<p>简单的来说就是：Paxos就是在一个不稳定的网络环境中对一个值达成一致。</p>
-<h3 id="Paxos解决的问题"><a href="#Paxos解决的问题" class="headerlink" title="Paxos解决的问题"></a>Paxos解决的问题</h3><p>Paxos诞生于古希腊Paxos岛上的多个法官在一个大厅对一个议案进行表决，如何达成统一结果的故事。<br>Paxos解决的问题是如果在一个机器宕机或者网络异常等异常的分布式系统中，快速且正确的再集群内部对某个数据值达成一致，并且保证异常不会破坏整个系统的一致性。（Paxos没办法抵抗恶意行为的节点，比如一个节点故意返回一个相反的结果，Paxos没办法解决这样的问题，因此Paxos没办法解决拜占庭将军问题，除非加上各种校验）。</p>
-<h3 id="协议过程"><a href="#协议过程" class="headerlink" title="协议过程"></a>协议过程</h3><h4 id="基本角色"><a href="#基本角色" class="headerlink" title="基本角色"></a>基本角色</h4><p>Paxos协议有三个角色：</p>
-<ul>
-<li>Proposer：提议发起者；</li>
-<li>Acceptor：提议接受者；</li>
-<li>Learner：提议学习者；</li>
-</ul>
-<h4 id="协议推导过程"><a href="#协议推导过程" class="headerlink" title="协议推导过程"></a>协议推导过程</h4><p>分布式一致性问题：<br>假设有一组可以提出value的进程集合；一致性算法需要保证提出的这么多的value中，只有一个value被选定，其他进程都应该能学习到这个被选定的值；这样所有的进程都最终保存相同的值。</p>
-<p>分布式一致性基本要求：<br>安全性：只有被提出的值才能被选定，只有一个value被选定；<br>活性：值最终会被选择，并且所有进程都会最终学习到这个值；</p>
-<p>推导过程：<br>Proposer是提议的发起者，不能决定最终选择的值，因此我们从Acceptor角色看起；<br>假设只有一个Acceptor，只要Acceptor接收到第一个提议，该提议就被选定，这样可以保证只有一个value被选定，但是如果机器宕机了，这唯一的Acceptor就不工作了，达不到问题的最终结果；因此必须有多个Acceptor。（paxos协议解决了机器宕机的问题）</p>
-<p>如果是多个Acceptor的情况，怎么保证多个Proposer和多个Acceptor下选定一个唯一的value?<br>假设Acceptor只要接收到第一个提议，就选中；则每个Acceptor都会选中一个唯一的value；但是由于多个Proposer提出的value会有不同，这样根据不同的网络速度，每个Acceptor选中的值不一样，不成立。<br>因此，Acceptor选择第一个值的约束不成立。这就意味着，Acceptor不能单纯的选择第一个值，那么提议的值必然是要有区分，这样才能区分Acceptor接收的是哪个值。</p>
-<blockquote>
-<p>提议的提案={提议的值+提议的编号}。</p>
-</blockquote>
-<p>由于Acceptor不单纯选择第一条提案，那么Acceptor就是可以接收多条提案，并从中选择一条作为最终值，如果有N个节点的Acceptor，要保证N个节点选定的是同一个值，这样的概率非常低，因此有了另一个约定：</p>
-<blockquote>
-<p>Acceptor可以接收多个提案，但是不需要全部都是同一个值，而是半数以上是同一个值，就最终确定这个值，就是典型的少数服从多数的原则。</p>
-</blockquote>
-<p>有了少数服从多数的原则，我们就可以标记多数选择的值为最终的一致值；但是少数服从多数还会带来一个问题：如果有三个节点选择了提案1；三个节点选择了提案2；其余都是小众；那就出现了平票的场景。这样的场景最终该选择哪个提案？<br>这个就需要决定提案1和提案2的优先级；因此提议的编号我们设置成自增。这样就诞生了一个约定：</p>
-<blockquote>
-<p>如果一个编号的提议值V被选择，那么每个编号更高（编号是自增的）的被Acceptor接受的提案的值必须是V。</p>
-</blockquote>
-<h4 id="协议描述"><a href="#协议描述" class="headerlink" title="协议描述"></a>协议描述</h4><p>基于上述的约定，Paxos算法大致如下，和两阶段有点类似：</p>
-<ul>
-<li>第一阶段：<ul>
-<li>Proposer选择一个提案编号N，然后向半数以上的Acceptor发送编号为N的Prepare请求；</li>
-<li>如果一个Acceptor接收到提案编号N，并且这个N大于该Acceptor已经响应过的所有编号；那么它就会将已经响应的最大编号的值返回给Proposer；同时该Acceptor承诺不再接收比N小的提案；</li>
-</ul>
-</li>
-<li>第二阶段：<ul>
-<li>如果Proposer收到半数以上的Acceptor对其发出的编号为N的Prepare请求响应，那么它就会发送一个[N,V]的Accept请求给半数以上的Acceptor。其中V就是响应编号中最大的提案的那个值。如果没有提案，则Proposer自行决定。</li>
-<li>如果Acceptor收到一个针对编号为N的提案的Accept的请求，只要该Acceptor没有对比N大的Prepare请求做过响应，它就接收该提案。</li>
-</ul>
-</li>
-</ul>
-<p><img src="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/0bd12a64fe81c26da1f7b328db9dd6dc.png" alt="Paxos过程"></p>
-<h4 id="Learner角色"><a href="#Learner角色" class="headerlink" title="Learner角色"></a>Learner角色</h4><p>如果计算机网络中节点非常多的话，广播一次所有节点将消耗大量的性能；因此我们可以只适用一部分的节点应用Paxos协议；然后当Acceptor接受最终提案后，就将最终的提案大宋给Learner；Learner的做法有好几种：</p>
-<ul>
-<li>提案发给所有Learner；</li>
-<li>提案发给一个主Learner，然后主Learner再发给其余Learner；</li>
-<li>提案发给一个Learner集合；然后集合再发给其他Learner；<br>几种做法各有优缺点，这里不详细讨论。</li>
-</ul>
-<h4 id="主Proposer"><a href="#主Proposer" class="headerlink" title="主Proposer"></a>主Proposer</h4><p>上述的协议保证了基本要求中的安全性；但是还存在活性的问题：<br>如果两个Proposer先后提出了顺序递增的提案，那么整个过程将陷入一个死循环中；<br>比如Proposer1提出了N=1的提案完成了第一阶段；这个时候Proposer2提出了N=2的提案也继续完成了第一阶段；那么这个时候Proposer1进行第二阶段会失败，它会再次发起N=3的提案；Proposer2进行第二阶段也失败，它会进行N=4的提案；这样就会不停的死循环下去。<br>因此，Proposer也需要进行一个主次的分别。</p>
-<h3 id="协议证明"><a href="#协议证明" class="headerlink" title="协议证明"></a>协议证明</h3><p>Paxos协议最终解决了当一个提议被多数接受后，这个提议的值被选定；那么这个值就是分布式一致的；后续所有进程选择的都是同一个值。<br>其实，Paxos就是一个数学问题，我们来看下数学证明：</p>
-<h4 id="原命题"><a href="#原命题" class="headerlink" title="原命题"></a>原命题</h4><blockquote>
-<p>如果一个提议{N0,V0}被多数Acceptor接受，那么不会存在提议{N1,V1}被大多数Acceptor接受，其中N0&lt;N1，并且V0!=V1；</p>
-</blockquote>
-<h4 id="证明"><a href="#证明" class="headerlink" title="证明"></a>证明</h4><p>不妨用反证法：<br>假设存在{N1,V1}符合条件，并且N1是满足条件最小的提议编号。<br>那么提议N0，N0+1，N0+2 。。。。N1-1编号对应的值都为V0；<br>由于存在{N1,V1}，说明N1被半数以上的Acceptor接受，并承诺不会接受比N1小的编号；<br>又因为存在{N0,V0}，说明N0也被半数以上的Acceptor接受，并承诺不会接受比N0小的编号；<br>所以，存在一个Acceptor即接受了N1，又接受了N0；<br>由Paxos协议得知，这个Acceptor一定是先接受了N0，再接受了N1；<br>所以在发出{N1,V1}这个提议的Proposer在发出{N1,V1}之前，有一个共识；必然存在一个N&gt;=N0，并且值为V0的提议被接受；这个时候这个Proposer会从所有的Acceptor返回值中选择一个编号最大的作为发送的请求；因此会选择一个N&gt;=N0,并且值为编号最大的值V0；<br>因此，就有V0==V1；矛盾，所以不存在该{N1,V1};</p>
-<h2 id="参考文档"><a href="#参考文档" class="headerlink" title="参考文档"></a>参考文档</h2><p>[1] Paxos made simple论文<br>[2] The Part-Time Parliament论文</p>
-
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2020/05/25/paxos/#more" rel="contents">
+                Read more &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
       
     </div>
 
@@ -1046,8 +686,9 @@
                 <i class="far fa-calendar"></i>
               </span>
               <span class="post-meta-item-text">Posted on</span>
+              
 
-              <time title="Created: 2020-05-25 19:50:16" itemprop="dateCreated datePublished" datetime="2020-05-25T19:50:16+08:00">2020-05-25</time>
+              <time title="Created: 2020-05-25 19:50:16 / Modified: 20:58:19" itemprop="dateCreated datePublished" datetime="2020-05-25T19:50:16+08:00">2020-05-25</time>
             </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -1074,16 +715,14 @@
 <h2 id="Quick-Start"><a href="#Quick-Start" class="headerlink" title="Quick Start"></a>Quick Start</h2><h3 id="Create-a-new-post"><a href="#Create-a-new-post" class="headerlink" title="Create a new post"></a>Create a new post</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo new <span class="string">"My New Post"</span></span><br></pre></td></tr></table></figure>
 
 <p>More info: <a href="https://hexo.io/docs/writing.html" target="_blank" rel="noopener">Writing</a></p>
-<h3 id="Run-server"><a href="#Run-server" class="headerlink" title="Run server"></a>Run server</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo server</span><br></pre></td></tr></table></figure>
-
-<p>More info: <a href="https://hexo.io/docs/server.html" target="_blank" rel="noopener">Server</a></p>
-<h3 id="Generate-static-files"><a href="#Generate-static-files" class="headerlink" title="Generate static files"></a>Generate static files</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo generate</span><br></pre></td></tr></table></figure>
-
-<p>More info: <a href="https://hexo.io/docs/generating.html" target="_blank" rel="noopener">Generating</a></p>
-<h3 id="Deploy-to-remote-sites"><a href="#Deploy-to-remote-sites" class="headerlink" title="Deploy to remote sites"></a>Deploy to remote sites</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo deploy</span><br></pre></td></tr></table></figure>
-
-<p>More info: <a href="https://hexo.io/docs/one-command-deployment.html" target="_blank" rel="noopener">Deployment</a></p>
-
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2020/05/25/hello-world/#more" rel="contents">
+                Read more &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
       
     </div>
 
@@ -1166,7 +805,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">6</span>
+          <span class="site-state-item-count">7</span>
           <span class="site-state-item-name">posts</span>
         </a>
       </div>

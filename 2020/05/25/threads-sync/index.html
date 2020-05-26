@@ -28,7 +28,7 @@
 <meta property="og:description" content="前言计算机操作系统是一门“人造的”系统；处处都透露这人类的思考惯性，人性的哲学原理。从人类本身的处理角度去理解操作系统中线程的各种原理是很有必要的，会让你对线程的理解更加深刻。 背景如我们所知，进程是一段运转的程序，是为了CPU上实现多道编程而发明的一个概念。在操作系统层面，进程是一系列计算机指令的聚合。当进程遇到阻碍时，比如用户输入等，会阻塞整个进程；后续跟输入无关的指令也得不到执行；因此，把进">
 <meta property="og:image" content="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/9316a383c4ddfedc165ce8121da086f1.png">
 <meta property="article:published_time" content="2020-05-25T12:44:16.000Z">
-<meta property="article:modified_time" content="2020-05-25T12:45:34.052Z">
+<meta property="article:modified_time" content="2020-05-25T12:58:08.667Z">
 <meta property="article:author" content="ericson (杨晨)">
 <meta property="article:tag" content="线程">
 <meta name="twitter:card" content="summary">
@@ -192,7 +192,7 @@
               <span class="post-meta-item-text">Posted on</span>
               
 
-              <time title="Created: 2020-05-25 20:44:16 / Modified: 20:45:34" itemprop="dateCreated datePublished" datetime="2020-05-25T20:44:16+08:00">2020-05-25</time>
+              <time title="Created: 2020-05-25 20:44:16 / Modified: 20:58:08" itemprop="dateCreated datePublished" datetime="2020-05-25T20:44:16+08:00">2020-05-25</time>
             </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -218,6 +218,8 @@
         <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>计算机操作系统是一门“人造的”系统；处处都透露这人类的思考惯性，人性的哲学原理。从人类本身的处理角度去理解操作系统中线程的各种原理是很有必要的，会让你对线程的理解更加深刻。</p>
 <h2 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h2><p>如我们所知，进程是一段运转的程序，是为了CPU上实现多道编程而发明的一个概念。在操作系统层面，进程是一系列计算机指令的聚合。当进程遇到阻碍时，比如用户输入等，会阻塞整个进程；后续跟输入无关的指令也得不到执行；因此，把进程中的指令分为几份不同的功能；每一份就是所谓的“线程”。<br><img src="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/9316a383c4ddfedc165ce8121da086f1.png" alt="线程模型"></p>
 <p>基于上述的描述，我们对线程进行定义：线程就是在进程里一个单独的顺序控制流。至于进程把哪些指令切分成进程，后面文章再进行分析。下面我们开始养金鱼。</p>
+<a id="more"></a>
+
 <h2 id="养金鱼"><a href="#养金鱼" class="headerlink" title="养金鱼"></a>养金鱼</h2><p>有一间屋里有三个房间；其中两个房间住着人（Tom和Jerry），另一个房间养了条金鱼；金鱼需要两个人进行喂养，金鱼有个很大的特点，就是没有饱的感觉，会不停的吃直到撑死自己；如果两个人先后都喂养了金鱼，金鱼就会撑死；如果两个人先后都没有喂养金鱼，金鱼会饿死；（假设不考虑给两个人排班的情况，两个人的行为不受约束）。</p>
 <p>上述的两个人就相当于两个线程，而金鱼则是临界资源；这就是一个线程同步的问题？线程同步的目的就是为了让多个线程不管执行的时候如何穿插，其运行结果都是正确的。</p>
 <p>为了养好金鱼，Tom和Jerry只能做如下约定：<br>（1）每天喂鱼一次，且仅一次；<br>（2）如果今天Tom喂了鱼，Jerry今天就不能喂鱼了；反之亦然；<br>（3）如果今天有一人没有喂鱼；另一个必须喂鱼；不然鱼会饿死；</p>
@@ -431,7 +433,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">6</span>
+          <span class="site-state-item-count">7</span>
           <span class="site-state-item-name">posts</span>
         </a>
       </div>

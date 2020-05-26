@@ -29,7 +29,7 @@
 <meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/bfd17ad9d0263f79439c77415e4123df.png">
 <meta property="og:image" content="https://ata2-img.oss-cn-zhangjiakou.aliyuncs.com/0bd12a64fe81c26da1f7b328db9dd6dc.png">
 <meta property="article:published_time" content="2020-05-25T12:11:33.000Z">
-<meta property="article:modified_time" content="2020-05-25T12:36:47.775Z">
+<meta property="article:modified_time" content="2020-05-25T12:58:11.516Z">
 <meta property="article:author" content="ericson (杨晨)">
 <meta property="article:tag" content="paxos">
 <meta name="twitter:card" content="summary">
@@ -193,7 +193,7 @@
               <span class="post-meta-item-text">Posted on</span>
               
 
-              <time title="Created: 2020-05-25 20:11:33 / Modified: 20:36:47" itemprop="dateCreated datePublished" datetime="2020-05-25T20:11:33+08:00">2020-05-25</time>
+              <time title="Created: 2020-05-25 20:11:33 / Modified: 20:58:11" itemprop="dateCreated datePublished" datetime="2020-05-25T20:11:33+08:00">2020-05-25</time>
             </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -230,6 +230,8 @@
 </ul>
 </li>
 </ul>
+<a id="more"></a>
+
 <h3 id="三阶段提交（3PC）"><a href="#三阶段提交（3PC）" class="headerlink" title="三阶段提交（3PC）"></a>三阶段提交（3PC）</h3><p>3PC解决了上述2PC的问题，把Commit阶段分成了PreCommit和Commit结算，相当于在Commit操作之前加了个屏障，这个屏障相当于告诉所有投票者，所有投票者都收到了propose的结果；当协调者在PreCommit之前crash，则voters可以认为不是所有voters收到propose结果，从而放弃commit或者选择新的协调者；如果协调者在PreCommit之后crash，则每个voter可以放心的Commit，因为已经默认所有voters都收到propose结果了。<br>缺点：3PC可以处理fail-stop的问题，但是不能处理网络划分和fail-recover问题。<br>网络划分：当有多个机器处于不同的网络中，并且网络之间不能通信，那协调者crash之后，两个网络会选出不同的新的协调者。<br>fail-recover：当协调者crash之后，选出新的协调者；当老的协调者重启后，新老协调者对同一个投票者可能发送不同的指令，投票者的状态出现分歧。</p>
 <h2 id="Paxos"><a href="#Paxos" class="headerlink" title="Paxos"></a>Paxos</h2><h3 id="概念"><a href="#概念" class="headerlink" title="概念"></a>概念</h3><blockquote>
 <p>Paxos is a mechanism for achieving consensus on a single value over unreliable communication channels.</p>
@@ -383,7 +385,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">6</span>
+          <span class="site-state-item-count">7</span>
           <span class="site-state-item-name">posts</span>
         </a>
       </div>

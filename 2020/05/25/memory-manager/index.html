@@ -34,7 +34,7 @@
 <meta property="og:image" content="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/5f02ccf8b8cdaee0e93b955b3283ea91.png">
 <meta property="og:image" content="https://ata2-img.cn-hangzhou.oss-pub.aliyun-inc.com/ff165180a8891e8081ffc58f88bfa754.png">
 <meta property="article:published_time" content="2020-05-25T12:46:36.000Z">
-<meta property="article:modified_time" content="2020-05-25T12:47:26.551Z">
+<meta property="article:modified_time" content="2020-05-25T12:58:12.896Z">
 <meta property="article:author" content="ericson (杨晨)">
 <meta property="article:tag" content="内存管理">
 <meta name="twitter:card" content="summary">
@@ -198,7 +198,7 @@
               <span class="post-meta-item-text">Posted on</span>
               
 
-              <time title="Created: 2020-05-25 20:46:36 / Modified: 20:47:26" itemprop="dateCreated datePublished" datetime="2020-05-25T20:46:36+08:00">2020-05-25</time>
+              <time title="Created: 2020-05-25 20:46:36 / Modified: 20:58:12" itemprop="dateCreated datePublished" datetime="2020-05-25T20:46:36+08:00">2020-05-25</time>
             </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -224,6 +224,8 @@
         <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>在操作系统出现之前，程序曾经存放在卡片上，计算机每读一张卡片，就运行一条指令，这个时候程序是直接从卡片到执行；但这种从外部存储媒介上直接执行指令的做法效率极低，且灵活性很差，一次只能一个卡片来处理；因此人们发明了内存存储器，来将需要运行的程序先行加载，再自动执行，从而提高效率和灵活性。<br>由于内存的出现，出现了“存储的程序”概念的出现，而存储的程序概念又导致计算机及软件系统的革命性变化，此后人们对内存的要求越来越高。</p>
 <h2 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h2><p>理想的情况下，程序员或用户对内存的要求是：大容量，高速度和持久性。但程序员面临的物理现实却是一个由缓存、主存、硬盘等组成的内存架构。<br>缓存的特点：低容量、高速度、高价格；<br>主存的特点：中容量、中速度、中价格；<br>硬盘的特点：大容量、低速度、低成本；<br>这样的存储架构和程序员、用户的期望相差较大；要以现在的架构为程序员所需的内存抽象，需要一个巧妙有效的内存管理机制。</p>
 <h2 id="内存管理相关"><a href="#内存管理相关" class="headerlink" title="内存管理相关"></a>内存管理相关</h2><p>内存管理把缓存、主存、硬盘都当成一样的内存，因为不管用户的程序是在缓存还是在主存或者硬盘，反正运行计算输出结果都是一样的。<br>内存管理怎么把缓存、主存和硬盘当成是一样的呢？？？这个时候就需要抽象（就像人类喜欢把香蕉和桃子都叫做水果），缓存、主存和硬盘被抽象为“虚拟内存”；通过虚拟内存，程序员和用户不关心底层的实现，只知道程序存在虚拟内存中。<br>虚拟内存本身独立于物理内存，因此概念提出的瞬间，内存管理机制便天然拥有一个目标：地址独立。那内存管理机制还有没有其他目标了？？？<br>在当今的多道程序操作系统中，虚拟内存中会运行着大量的程序，程序与程序之间是要相互独立的，因此内存管理的另一个目标就在于地址保护：一个程序不能去访问另一个程序的内存地址。<br>由于虚拟内存屏蔽了缓存、主存、硬盘的差异性，因此虚拟内存可以看做是操作系统提供的大容量，高速度的内存。<br>本文从种地的角度来解释操作系统内存管理机制的演变以及演变中的哲学原理，知识来源于生活。</p>
+<a id="more"></a>
+
 <h2 id="种地（本故事纯属虚构）"><a href="#种地（本故事纯属虚构）" class="headerlink" title="种地（本故事纯属虚构）"></a>种地（本故事纯属虚构）</h2><p>汉朝时期，老王出身贫寒，遂从军，历时十载，军功赫赫，国内一片繁荣；老王怕功高震主，遂请辞回家养老，由于老王的军功，皇帝赐了一块封地给他颐养天年；老王美滋滋的踏上了去封地的旅程~~<br>老王到了封地，果然是一片很大的封地，但是一片荒凉，啥都没有；老王把这块地叫做“物理内存”，给它标记了地址，一开始的地址为0，不停的增长到封地尽头N；</p>
 <h3 id="盖房子（操作系统内存位置）"><a href="#盖房子（操作系统内存位置）" class="headerlink" title="盖房子（操作系统内存位置）"></a>盖房子（操作系统内存位置）</h3><p>老王决定先建一个房子住，不然都没地方住，他把自己的房子命名为“操作系统”；问题产生了：房子建在哪边（操作系统应该放在物理内存哪边）？可以是地址0~N的任何地址位置。<br>计算机中的清零操作很方便，并且开始地址0很容易索引，因此老王决定把操作系统建在地址0处。</p>
 <blockquote>
@@ -418,7 +420,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">6</span>
+          <span class="site-state-item-count">7</span>
           <span class="site-state-item-name">posts</span>
         </a>
       </div>
